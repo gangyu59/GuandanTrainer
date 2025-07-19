@@ -1,0 +1,338 @@
+/* ✅ 基础重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* ✅ 全屏锁定 */
+html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: black; /* 防止露底色 */
+    position: relative;
+}
+
+/* ✅ 容器区域（可选） */
+#game-container, .game-table {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+/* ✅ 牌桌画布（真正全屏 + 刘海适配） */
+#game-canvas {
+  position: absolute;
+  top: env(safe-area-inset-top);
+  left: env(safe-area-inset-left);
+  width: calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right));
+  height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  background-color: #2a5c2a;
+  background-image: url('../assets/table.jpeg');
+  background-size: cover;
+  background-position: center;
+  z-index: 1;
+}
+
+#overlay-canvas {
+  width: 1000;
+	height: 700;
+	position: absolute; 
+	top:0; 
+	left:0; 
+	pointer-events:none; 
+	z-index:50;
+}
+
+#victory-canvas {
+	display:none; 
+	position:fixed; 
+	top:0; 
+	left:0; 
+	width:100%; 
+	height:100%; 
+	background-color:rgba(0,0,0,0.7); 
+	z-index:9999; 
+	text-align:center; 
+	color:white; 
+	font-size:2em; 
+	padding-top:20%;
+}
+
+/* 精确点击区域（完整保留） */
+.card-hit-area {
+    position: absolute;
+    width: 125px;
+    height: 140px;
+    z-index: 10;
+    /* 调试时可临时开启 */
+    /* background: rgba(255,0,0,0.2); */
+}
+
+#player-icons {
+  position: absolute;
+  width: 100vw;
+  height: 100vh;
+  top: 0;
+  left: 0;
+  z-index: 99;
+  pointer-events: none;
+}
+
+.player-icon {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid white;
+  background: #00000022;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+  overflow: hidden; /* 可保留也可不保留，用于避免圆圈外溢 */
+  opacity: 0.9;
+}
+
+.player-icon img {
+  width: 95%;
+  height: 95%;
+  object-fit: contain;  /* ⬅️ 保持图片完整显示（非裁切） */
+  border-radius: 50%;   /* 如果图片本身是方形，可加圆角更协调 */
+}
+
+/* ✅ 各方位 + 背景头像 */
+#player-0-icon {
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-image: url('assets/players/player_0.jpeg');
+}
+
+#player-1-icon {
+  top: 45%;
+  left: 5%;
+  transform: translateY(-50%);
+  background-image: url('assets/players/player_1.jpeg');
+}
+
+#player-2-icon {
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-image: url('assets/players/player_2.jpeg');
+}
+
+#player-3-icon {
+  top: 45%;
+  right: 5%;
+  transform: translateY(-50%);
+  background-image: url('assets/players/player_3.jpeg');
+}
+
+.player-0-icon img {
+  width: 130%;
+  height: 130%;
+  border-radius: 50%;   /* 如果图片本身是方形，可加圆角更协调 */
+}
+
+.player-icon.dimmed {
+  opacity: 0.5;
+  filter: grayscale(100%);
+}
+
+.player-icon.active {
+  opacity: 1;
+  filter: none;
+}
+
+/* 按钮通用样式 */
+button.action-btn {
+    width: 18vw;
+    height: 36px;
+    font-size: 20px;
+    font-weight: bold;
+    color: white;
+    border: none;
+    border-radius: 25px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: filter 0.2s;
+}
+
+/* 四个按钮配色 */
+#start-btn {
+    background: linear-gradient(to bottom, #4CAF50, #45a049); /* 绿色 */
+}
+
+#organize-btn {
+  background: linear-gradient(to bottom, #2196F3, #1976D2); /* 蓝色 */
+}
+
+#min-hand-btn {
+  background: linear-gradient(to bottom, #A1887F, #8D6E63); /* 深紫色 */
+}
+
+#reset-btn {
+    background: linear-gradient(to bottom, #FF9800, #F57C00); /* 橙色 */
+}
+
+#upload-btn {
+  background: linear-gradient(to bottom, #CE93D8, #BA68C8); /* 浅紫色 */
+  color: white;
+}
+
+#start-btn,
+#organize-btn,
+#min-hand-btn,
+#reset-btn,
+#upload-btn:hover {
+  filter: brightness(1.1);
+}
+
+/* 横向排布按钮区域 */
+#button-row {
+    position: fixed;
+    bottom: calc(0px + env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90vw;
+    display: flex;
+    justify-content: space-between;
+    z-index: 100;
+}
+
+#action-panel {
+  position: absolute;
+  bottom: 55%; /* 离底部位置可微调 */
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 80px;
+  z-index: 1;
+}
+
+#action-panel button {
+  padding: 6px 30px;
+  font-size: 20px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  transition: transform 0.1s ease;
+}
+
+#action-panel button:active {
+  transform: scale(0.96);
+}
+
+#pass-btn {
+  background-color: #AEE5FF; /* 浅蓝色 */
+  color: #004477;
+}
+
+#play-btn {
+  background-color: #FFE299; /* 浅黄色 */
+  color: #AA6600;
+}
+
+.rank-label {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  background: gold;
+  color: black;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+#scoreboard {
+  position: absolute;
+  top: 70px;
+  left: 40px;
+  display: flex;
+  background: #f4f4f4;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  font-family: 'Arial Rounded MT', sans-serif;
+  z-index: 9999;
+}
+
+#scoreboard .team {
+  padding: 3px 5px;
+  text-align: center;
+}
+
+#scoreboard .team-name {
+  font-size: 12px;
+  color: #444;
+}
+
+#scoreboard .team-score {
+  font-size: 14px;
+  font-weight: bold;
+  color: #222;
+}
+
+#scoreboard .highlight {
+  background: #ff5656;
+  color: white;
+  border-radius: 4px;
+}
+
+#settings-container {
+  position: absolute;
+  top: 70px;
+  right: 50px;
+  z-index: 999;
+}
+
+#settings-btn {
+  font-size: 18px;
+  background: #eee;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+#settings-panel {
+  position: absolute;
+  top: 35px;
+  right: 0;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 10px;
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+  border-radius: 6px;
+  font-size: 14px;
+  width: 100px;
+}
+
+#settings-panel.hidden {
+  display: none;
+}
+
+#settings-panel label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+#hourglass {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 60px;
+    z-index: 200;
+		text-align: center;
+}

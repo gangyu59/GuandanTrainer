@@ -1,0 +1,7 @@
+# === requirements.txt ===
+torch
+requests
+numpy
+scikit-learn
+tqdm
+matplotlib

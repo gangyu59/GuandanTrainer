@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+		<head>
+		  <meta charset="UTF-8">
+		  <meta name="viewport"
+		        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+		  <title>HappyGuandan</title>
+		  <link rel="stylesheet" href="css/style.css">
+		</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+				<<canvas id="overlay-canvas" width="1000" height="700" style="position:absolute; top:0; left:0; pointer-events:none; z-index:50;"></canvas>
+				<div id="hourglass" style="display: none; font-size: 50px; text-align: center;">⏳</div>
+				<div id="button-row">
+				  <button id="start-btn" class="action-btn">发牌</button>
+				  <button id="organize-btn" class="action-btn">理牌</button>
+				  <button id="min-hand-btn" class="action-btn">AI组牌</button>
+				  <button id="reset-btn" class="action-btn">还原</button>
+				  <button id="upload-btn" class="action-btn">记录数据</button> 
+				</div>
+    </div>
+
+		<div id="action-panel">
+		  <button id="pass-btn">过牌</button>
+		  <button id="play-btn">出牌</button>
+		</div>
+		
+		<div id="player-icons">
+		  <div class="player-icon" id="player-0-icon">
+		    <img src="assets/players/player_0.jpeg" alt="P0">
+		  </div>
+		  <div class="player-icon" id="player-1-icon">
+		    <img src="assets/players/player_1.jpeg" alt="P1">
+		  </div>
+		  <div class="player-icon" id="player-2-icon">
+		    <img src="assets/players/player_2.jpeg" alt="P2">
+		  </div>
+		  <div class="player-icon" id="player-3-icon">
+		    <img src="assets/players/player_3.jpeg" alt="P3">
+		  </div>
+		</div>
+		
+		<div id="scoreboard">
+		  <div class="team self">
+		    <div class="team-name">己方</div>
+		    <div class="team-score" id="self-score">2</div>
+		  </div>
+		  <div class="team opponent">
+		    <div class="team-name">对方</div>
+		    <div class="team-score" id="opponent-score">2</div>
+		  </div>
+		</div>
+		
+		<div id="victory-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background-color:rgba(0,0,0,0.7); z-index:9999; text-align:center; color:white; font-size:2em; padding-top:20%">
+		  <div id="victory-message">🎉 恭喜南北队获胜！</div>
+		  <button id="restart-match-btn" style="margin-top: 30px; font-size: 1em;">再来一局</button>
+		</div>
+
+	  <!-- 设置按钮（右上角齿轮） -->
+		<div id="settings-container">
+		  <button id="settings-btn">⚙️</button>
+		  <div id="settings-panel" class="hidden">
+		    <label><input type="checkbox" id="tribute-mode"> 进贡模式</label><br>
+		    <label><input type="checkbox" id="auto-play"> 自动出牌</label><br>
+		    <label><input type="checkbox" id="ml-model"> 机器学习</label>
+		  </div>
+		</div>
+
+    <!-- 按顺序加载JS文件 -->
+		<script src="static/js/utils.js"></script>
+    <script src="static/js/Card.js"></script>
+    <script src="static/js/Deck.js"></script>
+    <script src="static/js/Player.js"></script>
+		<script src="static/js/ScoreSystem.js"></script>
+    <script src="static/js/CardRules.js"></script>
+		<script src="static/js/GameRules.js"></script>
+		<script src="static/js/CardPower.js"></script>
+    <script src="static/js/CanvasManager.js"></script>
+    <script src="static/js/OverlayRenderer.js"></script>
+		<script src="static/js/PartnerStrategy.js"></script>
+    <script src="static/js/CardSelector.js"></script>
+		<script src="static/js/HandOptimizer.js"></script>
+		<script src="static/js/AIPlayer.js"></script>
+		<script src="static/js/DataLogger.js"></script>
+    <script src="static/js/Game.js"></script>
+		<script src="static/js/main.js"></script>
+</body>
+</html>
