@@ -40,28 +40,8 @@ function DataLogger() {
     }
   };
 
-	this.uploadToFirebase1 = async function () {
-  const data = this.loadLocalData();
-  if (data.length === 0) {
-    console.warn('⚠️ 没有可上传的数据');
-    return;
-  }
 
-  // ✅ 暂时打印到控制台
-  console.log('📤 模拟上传训练数据（共 ' + data.length + ' 条）:');
-  data.forEach((entry, i) => {
-    console.log(`--- 第 ${i + 1} 条记录 ---`);
-//    console.log('🧠 状态向量:', entry.state);
-//    console.log('🎯 动作向量:', entry.action);
-    console.log('ℹ️ 元信息:', entry.meta);
-    console.log('🕒 时间戳:', new Date(entry.timestamp).toLocaleString());
-  });
 
-  // ✅ 清除本地数据（如你不希望清空可注释掉）
-  localStorage.removeItem(this.localKey);
-};
-	
-	
   /**
    * 上传所有数据到 Firebase（如果已配置）
    */
@@ -92,6 +72,32 @@ function DataLogger() {
 	    console.error('❌ 上传出错：', e);
 	  }
 	};
+
+  this.saveToSQLite = async function () {
+      const data = this.loadLocalData();
+      if (data.length === 0) {
+        console.warn('⚠️ 没有可写入 SQLite 的数据');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/save_sqlite', {
+          method: 'POST',
+          body: JSON.stringify(data),
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (res.ok) {
+          console.log(`✅ 成功写入 SQLite，共 ${data.length} 条`);
+          localStorage.removeItem(this.localKey);
+        } else {
+          const msg = await res.text();
+          console.error('❌ 写入 SQLite 失败:', msg);
+        }
+      } catch (e) {
+        console.error('❌ 写入 SQLite 出错:', e);
+      }
+    };
 }
 
 window.dataLogger = new DataLogger();

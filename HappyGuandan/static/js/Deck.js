@@ -30,11 +30,6 @@ function Deck() {
         }
     };
     
-    // 发牌 (返回指定数量的牌)
-    this.deal = function(num) {
-        return this.cards.splice(0, num);
-    };
-    
     // 初始化构造
     this.init();
 }

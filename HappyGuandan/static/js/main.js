@@ -61,7 +61,7 @@ window.resetMatch = function () {
   const startBtn = document.getElementById('start-btn');
   if (startBtn) {
     startBtn.disabled = false;
-    startBtn.textContent = '发牌';
+    startBtn.textContent = '开始';
   }
 
   // 清除 overlay 层内容
@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	// 初始化按钮与点击事件（页面加载完成时触发）
 	window.onload = function () {
 	  const startBtn = document.getElementById('start-btn');
-	  startBtn.textContent = '发牌';
+	  startBtn.textContent = '开始';
 	
 	  startBtn.addEventListener('click', () => {
 	    // 防止中途误点
@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	
 	  try {
 	    if (window.dataLogger) {
-	      await window.dataLogger.uploadToFirebase(); // ✅ 可选：你也可以改为 localStorage 输出等
+	      await window.dataLogger.saveToSQLite(); // ✅ await window.dataLogger.uploadToFirebase();
 	      alert('✅ 数据上传成功！');
 	    } else {
 	      alert('⚠️ 当前 dataLogger 未初始化');

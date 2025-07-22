@@ -39,9 +39,11 @@ html, body {
 }
 
 #overlay-canvas {
-  width: 1000;
-	height: 700;
-	position: absolute; 
+  /*width: 1000;*/
+  /*  height: 700;*/
+    width: calc(100% - env(safe-area-inset-left) - env(safe-area-inset-right));
+    height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+	position: absolute;
 	top:0; 
 	left:0; 
 	pointer-events:none; 
@@ -110,28 +112,28 @@ html, body {
   bottom: 10%;
   left: 50%;
   transform: translateX(-50%);
-  background-image: url('assets/players/player_0.jpeg');
+  background-image: url('../assets/players/player_0.jpeg');
 }
 
 #player-1-icon {
   top: 45%;
   left: 5%;
   transform: translateY(-50%);
-  background-image: url('assets/players/player_1.jpeg');
+  background-image: url('../assets/players/player_1.jpeg');
 }
 
 #player-2-icon {
   top: 15%;
   left: 50%;
   transform: translateX(-50%);
-  background-image: url('assets/players/player_2.jpeg');
+  background-image: url('../assets/players/player_2.jpeg');
 }
 
 #player-3-icon {
   top: 45%;
   right: 5%;
   transform: translateY(-50%);
-  background-image: url('assets/players/player_3.jpeg');
+  background-image: url('../assets/players/player_3.jpeg');
 }
 
 .player-0-icon img {

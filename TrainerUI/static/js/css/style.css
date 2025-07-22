@@ -1,0 +1,94 @@
+/* === 全局设置 === */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f4f4f8;
+  color: #333;
+}
+
+.container {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 20px 30px;
+  background: #ffffff;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  border-radius: 8px;
+}
+
+/* === 标题 === */
+h1 {
+  text-align: center;
+  color: #444;
+  margin-bottom: 30px;
+}
+
+/* === 分区 === */
+.section {
+  margin-bottom: 25px;
+}
+
+/* === 标签和输入框 === */
+label {
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+input[type="number"] {
+  padding: 6px 10px;
+  font-size: 1rem;
+  width: 80px;
+}
+
+/* === 按钮 === */
+button {
+  padding: 10px 20px;
+  font-size: 1rem;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 10px;
+  transition: background-color 0.2s ease;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* === 进度条样式 === */
+.progress-wrapper {
+  width: 100%;
+  background-color: #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 24px;
+  width: 0%;
+  background-color: #2196F3;
+  color: white;
+  text-align: center;
+  line-height: 24px;
+  font-weight: bold;
+  transition: width 0.3s ease;
+}
+
+/* === 状态输出框 === */
+#statusOutput {
+  width: 100%;
+  font-family: monospace;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background: #fafafa;
+  resize: none;
+  box-sizing: border-box;
+}

@@ -234,36 +234,4 @@ AIPlayer.prototype.playTurn = function (game) {
   }, 500);
 };
 
-AIPlayer.prototype.decideByML0 = function (player, game) {
-  const stateVec = window.getStateVector(game, player);
-  const groups = window.cardGrouper.groupByMinHands(player.cards);
-
-  if (!groups || groups.length === 0) return { type: 'pass' };
-
-  let bestScore = -Infinity;
-  let bestGroup = null;
-
-  for (let group of groups) {
-    const actionVec = window.getActionVector(group.cards || []);
-    const combinedVec = stateVec.concat(actionVec);
-    const score = this._fakeModelScore(combinedVec);
-    if (score > bestScore) {
-      bestScore = score;
-      bestGroup = group;
-    }
-  }
-
-  if (!bestGroup || bestScore < 0.1) return { type: 'pass' }; // 模拟阈值
-  return {
-    type: bestGroup.type,
-    cards: bestGroup.cards
-  };
-};
-
-AIPlayer.prototype._fakeModelScore = function (vec) {
-  const weights = this.fakeWeights || Array(vec.length).fill(0).map((_, i) => Math.sin(i) * 0.1); // 模拟假权重
-  this.fakeWeights = weights; // 缓存
-  return vec.reduce((sum, v, i) => sum + v * weights[i], 0);
-};
-
 window.PlayCard = AIPlayer;

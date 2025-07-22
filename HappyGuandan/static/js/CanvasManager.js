@@ -177,7 +177,7 @@ function CanvasManager() {
 		    console.log(`📍 渲染位置 startX=${startX}, startY=${startY}, totalWidth=${totalWidth}`);
 		
 		    // ✅ 清理绘图区
-		    ctx.clearRect(startX - 0, startY - 0, totalWidth + 0, cardHeight + 20);
+		    ctx.clearRect(startX, startY, totalWidth, cardHeight + 20);
 		
 		    if (isPass) {
 		        console.log(`⚠️ 玩家选择过牌，显示 “过牌” 提示`);
