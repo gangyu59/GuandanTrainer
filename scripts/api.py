@@ -68,7 +68,6 @@ async def save_sqlite(request: Request):
         )
 
 
-# ... (其他路由保持相同结构，只是添加headers参数) ...
 
 status = {
     "status": "idle",  # idle / training / done / error
@@ -78,62 +77,94 @@ status = {
     "last_updated": None
 }
 
+training_logs = []
+
+def append_log(msg):
+    training_logs.append(msg)
+    if len(training_logs) > 100:
+        training_logs.pop(0)
+
 
 @router.post("/train")
 async def train_model_api(request: Request):
-    print("✅ 收到训练请求")
     try:
         config = await request.json()
-        print(f"⚙️ 配置参数: {config}")
+        source = config.get("source", "local")
+        epochs = int(config.get("epochs", 50))
 
         status.update({
             "status": "training",
             "epoch": 0,
-            "total": int(config.get("epochs", 10)),
+            "total": epochs,
             "metrics": {},
             "last_updated": datetime.datetime.now().isoformat()
         })
 
-        # 模拟训练过程
-        for epoch in range(status["total"]):
-            status["epoch"] = epoch + 1
-            status["last_updated"] = datetime.datetime.now().isoformat()
-            print(f"⏳ 训练进度: {epoch + 1}/{status['total']}")
-            await asyncio.sleep(1)  # 非阻塞等待
+        raw_data = load_data(source)
+        cleaned_data = clean_dataset(raw_data)
+        X, y, meta = parse_dataset(cleaned_data)
+
+        # 获取胜率和动作分布
+        stats = analyze_meta(meta, y)  # 返回 winrate + action_dist
+
+        from scripts.simple_mlp import SimpleMLP
+        model = train_model(X, y, epochs, status=status, log_callback=append_log)
+
+        export_weights(model)
+
+        # 更新状态，包含样本数、胜率、动作分布
+        action_dist = stats.get("action_dist")
+        if action_dist:
+            action_dist = {int(k): float(v) for k, v in action_dist.items()}  # 转换为可序列化格式
 
         status.update({
             "status": "done",
-            "metrics": {"accuracy": 0.95},
+            "metrics": {
+                "samples": len(X),
+                "winrate": float(stats.get("winrate", 0)),
+                "action_dist": action_dist,
+                "accuracy": float(stats.get("accuracy", 0)),
+                "entropy": float(stats.get("entropy", 0)),
+            },
             "last_updated": datetime.datetime.now().isoformat()
         })
 
-        return JSONResponse(
-            content={"status": "success"},
-            headers={"Access-Control-Allow-Origin": "*"}
-        )
+        return {"status": "done"}
+
     except Exception as e:
         status.update({
             "status": "error",
             "error": str(e),
             "last_updated": datetime.datetime.now().isoformat()
         })
-        return JSONResponse(
-            content={"error": str(e)},
-            headers={"Access-Control-Allow-Origin": "*"}
-        )
+        return {"error": str(e)}
 
 
 @router.get("/status")
 def get_status():
-    current_status = {
-        "status": status["status"],
-        "epoch": status["epoch"],
-        "total": status["total"],
-        "metrics": status["metrics"],
-        "last_updated": status["last_updated"],
-        "server_time": datetime.datetime.now().isoformat()  # 新增服务器时间
+    # 深度复制状态以避免修改原始数据
+    metrics = status.get("metrics", {})
+
+    # 显式转换所有 NumPy 类型为 Python 原生类型
+    safe_metrics = {
+        "samples": int(metrics.get("samples", 0)),
+        "winrate": float(metrics.get("winrate", 0)),
+        "action_dist": {int(k): float(v) for k, v in metrics.get("action_dist", {}).items()},
+        "accuracy": float(metrics.get("accuracy", 0)),  # 强制转换 np.float64
+        "entropy": float(metrics.get("entropy", 0))  # 强制转换 np.float32
     }
-    print(f"🔍 详细状态查询: {current_status}")
+
+    current_status = {
+        "status": status.get("status"),
+        "epoch": int(status.get("epoch", 0)),
+        "total": int(status.get("total", 0)),
+        "metrics": safe_metrics,  # 使用转换后的安全数据
+        "last_updated": status.get("last_updated"),
+        "server_time": datetime.datetime.now().isoformat(),
+        "logs": training_logs,
+        "error": status.get("error")
+    }
+
     return JSONResponse(
         content=current_status,
         headers={"Access-Control-Allow-Origin": "*"}

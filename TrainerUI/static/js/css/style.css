@@ -92,3 +92,86 @@ button:disabled {
   resize: none;
   box-sizing: border-box;
 }
+
+
+/* ===== 图表容器整体样式 ===== */
+.section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 24px;
+  padding: 16px;
+  margin: 20px auto;
+  max-width: 1400px;
+}
+
+/* ===== 统一图表卡片样式 ===== */
+.section canvas {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  transition: all 0.3s ease;
+  border: 1px solid #eaeaea;
+}
+
+.section canvas:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* ===== 单个图表标题样式 ===== */
+.chart-title {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+}
+
+/* ===== 图表容器伪元素装饰 ===== */
+.section canvas::before {
+  content: '';
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, #3498db, #9b59b6);
+  border-radius: 4px 4px 0 0;
+  margin: -20px -20px 20px -20px;
+}
+
+/* ===== 响应式调整 ===== */
+@media (max-width: 1200px) {
+  .section {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .section {
+    grid-template-columns: 1fr;
+  }
+
+  .section canvas {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 16/9;
+  }
+}
+
+/* ===== 图表工具提示样式覆盖 ===== */
+.chartjs-tooltip {
+  background: rgba(44, 62, 80, 0.9) !important;
+  border-radius: 6px !important;
+  padding: 8px 12px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: none !important;
+}
+
+.chartjs-tooltip-key {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 3px;
+}

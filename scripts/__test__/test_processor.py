@@ -42,7 +42,7 @@ class TestProcessor(unittest.TestCase):
             {"playerIndex": 1, "winner": "self"},
         ]
         # 预期胜利为前两个，第三第四为失败
-        processor.analyze_meta(meta)  # ✅ 输出测试，不抛异常即算通过
+        processor.analyze_meta(meta, y)  # ✅ 输出测试，不抛异常即算通过
 
 
 if __name__ == '__main__':

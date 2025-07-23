@@ -13,8 +13,8 @@ if __name__ == '__main__':
     cleaned_data = clean_dataset(raw_data)
     X, y, meta = parse_dataset(cleaned_data)
 
-    analyze_meta(meta)
+    analyze_meta(meta, y)
     print(f"\n🎯 开始训练：X={X.shape}, y={y.shape}\n")
 
-    model = train_model(X, y, epochs=20)
+    model = train_model(X, y, epochs=50)
     export_weights(model)
