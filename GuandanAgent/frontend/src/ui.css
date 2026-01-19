@@ -107,9 +107,17 @@ body {
   justify-content: center;
   align-items: center;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
+  overflow: visible; /* Changed from hidden to visible for badges */
   opacity: 1.0;
   z-index: 300;
+  pointer-events: auto; /* Allow interaction with children like checkbox */
+}
+
+input[type="checkbox"] {
+  accent-color: #4CAF50;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 
 .player-icon.active {
@@ -125,7 +133,8 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block; /* Remove inline gap */
+  display: block;
+  border-radius: 50%; /* Ensure img is rounded since parent overflow is visible */
 }
 
 #player-0-icon {
@@ -152,7 +161,6 @@ body {
   transform: translateY(-50%);
 }
 
-/* 手牌区域：固定在底部偏上，整体居中 */
 .hand-panel {
   position: absolute;
   bottom: 16%;
@@ -165,7 +173,6 @@ body {
   z-index: 150;
 }
 
-/* 手牌容器：横向居中，间距很小，允许溢出一点 */
 .hand-cards {
   display: flex;
   flex-direction: row;
@@ -177,14 +184,12 @@ body {
   padding-bottom: 8px;
 }
 
-/* 每一组牌的占位宽度 */
 .card-group {
   position: relative;
   width: 90px;
   height: 140px;
 }
 
-/* 单张牌：在组内垂直叠放，始终居中对齐 */
 .card-image {
   position: absolute;
   left: 50%;
@@ -197,8 +202,8 @@ body {
 }
 
 .card-image.selected {
-  outline: 2px solid #ffd54f;
-  filter: brightness(1.1);
+  outline: none;
+  filter: brightness(0.4) grayscale(100%);
 }
 
 .card-image:hover {
@@ -216,6 +221,7 @@ body {
   background: rgba(15, 23, 42, 0.9);
   color: #f9fafb;
   font-size: 10px;
+  white-space: nowrap;
 }
 
 #scoreboard {
@@ -285,7 +291,6 @@ body {
   cursor: pointer;
 }
 
-/* 出牌展示区域：位于桌面中央偏下方 */
 .table-play-area {
   position: absolute;
   bottom: 45%;
@@ -400,29 +405,48 @@ button.action-btn:disabled {
 
 #victory-overlay {
   display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
-  z-index: 9999;
-  text-align: center;
+}
+
+/* Rank badges */
+.rank-badge {
+  position: absolute;
+  top: -10px;
+  right: -20px;
+  background: #ff5722;
   color: white;
-  font-size: 2em;
-  padding-top: 20%;
+  font-weight: bold;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  white-space: nowrap;
+  border: 2px solid white;
+  z-index: 400;
 }
 
-#victory-message {
-  margin-bottom: 24px;
+.rank-badge.rank-0 { 
+  background: linear-gradient(135deg, #FFD700, #FFA500); 
+  color: #b71c1c; 
+  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  box-shadow: 0 0 10px #FFD700;
+  font-size: 16px;
+  padding: 5px 10px;
 }
-
-#restart-match-btn {
-  font-size: 18px;
-  padding: 8px 18px;
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
+.rank-badge.rank-1 { 
+  background: linear-gradient(135deg, #FFFFFF, #B0BEC5); 
+  color: #37474F;
+  box-shadow: 0 0 10px #B0BEC5; 
+  font-weight: 800;
+}
+.rank-badge.rank-2 { 
+  background: linear-gradient(135deg, #FFAB91, #D84315); 
+  color: #fff; 
+  box-shadow: 0 0 8px #D84315;
+}
+.rank-badge.last   { 
+  background: linear-gradient(135deg, #EF5350, #C62828); 
+  color: #fff; 
+  box-shadow: 0 0 8px #C62828;
 }
 
 @media (max-width: 900px) {

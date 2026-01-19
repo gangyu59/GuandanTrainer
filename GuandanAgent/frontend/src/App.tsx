@@ -65,6 +65,7 @@ export function App() {
   const [tableCards, setTableCards] = useState<Card[]>([]);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [lastPlay, setLastPlay] = useState<LegacyLastPlay>(null);
+  const [lastActions, setLastActions] = useState<Record<number, { cards: Card[]; type: string } | null>>({});
   const [passCount, setPassCount] = useState(0);
   const [finishedPlayers, setFinishedPlayers] = useState<number[]>([]);
   const [gameOver, setGameOver] = useState(false);
@@ -140,6 +141,7 @@ export function App() {
       setDealState("success");
       setCurrentPlayerIndex(0);
       setLastPlay(null);
+      setLastActions({});
       setPassCount(0);
       setFinishedPlayers([]);
       setGameOver(false);
@@ -180,6 +182,23 @@ export function App() {
       return true;
     }
     return false;
+  }
+
+  function getRankBadge(playerIndex: number) {
+    if (!gameOver) return null;
+    const rankIndex = finishedPlayers.indexOf(playerIndex);
+    if (rankIndex === -1) {
+      // If game is over, anyone not finished is the last one (assuming single winner or full playout)
+      // Guandan usually plays until 3 players finish.
+      // If we stop when 3 finish, the 4th is last.
+      const activeCount = players.length - finishedPlayers.length;
+      if (activeCount <= 1) {
+         return <div className="rank-badge last">末游</div>;
+      }
+      return null;
+    }
+    const labels = ["头游", "二游", "三游", "末游"];
+    return <div className={`rank-badge rank-${rankIndex}`}>{labels[rankIndex]}</div>;
   }
 
   function runAiTurn(playerIndex: number, last: LegacyLastPlay) {
@@ -225,10 +244,13 @@ export function App() {
       if (activeCount > 1 && newPass >= activeCount - 1) {
         clearedLast = null;
         resetPass = 0;
-        setTableCards([]);
       }
       setPassCount(resetPass);
       setLastPlay(clearedLast);
+      setLastActions((prev) => ({
+        ...prev,
+        [playerIndex]: { cards: [], type: "pass" },
+      }));
       const nextIndex = getNextActivePlayerIndex(playerIndex);
       setCurrentPlayerIndex(nextIndex);
       return;
@@ -240,12 +262,16 @@ export function App() {
     const nextHands: Record<string, Card[]> = {
       ...hands,
       [playerId]: (hands[playerId] ?? []).filter(
-        (c) => !playCards.includes(c),
+        (c) => !playCards.some(pc => pc.suit === c.suit && pc.rank === c.rank),
       ),
     };
 
     setHands(nextHands);
-    setTableCards(playCards);
+    setLastActions((prev) => ({
+      ...prev,
+      [playerIndex]: { cards: playCards, type },
+    }));
+
     const newLast: LegacyLastPlay = {
       playerIndex,
       cards: playCards,
@@ -253,6 +279,18 @@ export function App() {
     };
     setLastPlay(newLast);
     setPassCount(0);
+
+    // Update P0 visual hand if it's P0 playing (Auto Play)
+    if (playerIndex === 0) {
+      const remaining = nextHands[playerId] ?? [];
+      try {
+        const newGroups = handOptimizer.groupByMinHands(remaining);
+        setCurrentSelfHand(newGroups);
+      } catch (e) {
+        setCurrentSelfHand(groupForRank(remaining));
+      }
+      setSelectedIndices(new Set());
+    }
 
     if ((nextHands[playerId] ?? []).length === 0) {
       setFinishedPlayers((prev) =>
@@ -293,7 +331,10 @@ export function App() {
       return;
     }
 
-    setTableCards(group);
+    setLastActions((prev) => ({
+      ...prev,
+      0: { cards: group, type },
+    }));
     const nextGroups = groups.filter((_, index) => index !== groupIndex);
     setCurrentSelfHand(nextGroups);
     setSelectedGroupIndex(null);
@@ -361,6 +402,17 @@ export function App() {
     const key = `${groupIndex}-${cardIndex}`;
     const newSelection = new Set(selectedIndices);
 
+    // Split Mode: Toggle individual cards
+    if (isSplitMode) {
+      if (newSelection.has(key)) {
+        newSelection.delete(key);
+      } else {
+        newSelection.add(key);
+      }
+      setSelectedIndices(newSelection);
+      return;
+    }
+
     if (newSelection.has(key)) {
       // Deselect specific card
       newSelection.delete(key);
@@ -424,7 +476,10 @@ export function App() {
       return;
     }
 
-    setTableCards(selectedCards);
+    setLastActions((prev) => ({
+      ...prev,
+      0: { cards: selectedCards, type },
+    }));
 
     // Remove played cards from selfGroups
     // We need to reconstruct groups. Simplest way: filter out played cards and regroup?
@@ -493,8 +548,11 @@ export function App() {
     if (activeCount > 1 && newPass >= activeCount - 1) {
       clearedLast = null;
       resetPass = 0;
-      setTableCards([]);
     }
+    setLastActions((prev) => ({
+      ...prev,
+      0: { cards: [], type: "pass" },
+    }));
     setSelectedIndices(new Set());
     setPassCount(resetPass);
     setLastPlay(clearedLast);
@@ -533,6 +591,7 @@ export function App() {
       setHands(game.hands);
       setCurrentPlayerIndex(0);
       setLastPlay(null);
+      setLastActions({});
       setPassCount(0);
       setFinishedPlayers([]);
       setGameOver(false);
@@ -639,7 +698,7 @@ export function App() {
       runAiTurn(currentPlayerIndex, lastPlay);
     }, 500);
     return () => clearTimeout(timer);
-  }, [currentPlayerIndex, game, gameOver, finishedPlayers, lastPlay, autoPlay]);
+  }, [currentPlayerIndex, game, gameOver, finishedPlayers, lastPlay, autoPlay, hands]);
 
   const healthClass =
     healthState === "success"
@@ -654,7 +713,7 @@ export function App() {
         <div className="table-background" />
 
         <div className="top-strip">
-          <div className="game-title">Happy Guandan Agent</div>
+          {/*<div className="game-title">Happy Guandan Agent</div>*/}
           <div className={healthClass}>{healthMessage ?? "检测后端中"}</div>
         </div>
 
@@ -666,9 +725,33 @@ export function App() {
             }
             id="player-0-icon"
           >
+            {getRankBadge(0)}
             <img src="/players/player_0.jpeg" alt="P0" />
-            <div className="player-card-count">
-              {(hands[players[0]] ?? game?.hands?.[players[0]] ?? []).length}
+            <div
+              className="p0-extras"
+              style={{
+                position: "absolute",
+                left: "100%",
+                top: "50%",
+                transform: "translateY(-50%)",
+                marginLeft: "12px",
+                display: "flex",
+                alignItems: "center",
+                background: "rgba(0, 0, 0, 0.6)",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                color: "white",
+                fontSize: "12px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isSplitMode}
+                onChange={(e) => setIsSplitMode(e.target.checked)}
+                style={{ marginRight: "4px", cursor: "pointer" }}
+              />
+              <span onClick={() => setIsSplitMode(!isSplitMode)} style={{ cursor: "pointer" }}>单选</span>
             </div>
           </div>
           <div
@@ -678,6 +761,7 @@ export function App() {
             }
             id="player-1-icon"
           >
+            {getRankBadge(1)}
             <img src="/players/player_1.jpeg" alt="P1" />
             <div className="player-card-count">
               {(hands[players[1]] ?? game?.hands?.[players[1]] ?? []).length}
@@ -690,6 +774,7 @@ export function App() {
             }
             id="player-2-icon"
           >
+            {getRankBadge(2)}
             <img src="/players/player_2.jpeg" alt="P2" />
             <div className="player-card-count">
               {(hands[players[2]] ?? game?.hands?.[players[2]] ?? []).length}
@@ -702,6 +787,7 @@ export function App() {
             }
             id="player-3-icon"
           >
+            {getRankBadge(3)}
             <img src="/players/player_3.jpeg" alt="P3" />
             <div className="player-card-count">
               {(hands[players[3]] ?? game?.hands?.[players[3]] ?? []).length}
@@ -751,39 +837,85 @@ export function App() {
                     checked={autoPlay}
                     onChange={(e) => setAutoPlay(e.target.checked)}
                   />
-                  托管 (Auto Play)
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={isSplitMode}
-                    onChange={(e) => setIsSplitMode(e.target.checked)}
-                  />
-                  拆牌模式 (Split Mode)
+                    AI 托管
                 </label>
               </div>
             </>
           ) : null}
         </div>
 
-        {tableCards.length > 0 ? (
-          <div className="table-play-area" style={tableCardsStyle}>
-            {tableCards.map((card, index) => (
-              <img
-                key={`table-${card.suit}-${card.rank}-${index}`}
-                src={cardImagePath(card)}
-                alt={formatCardLabel(card)}
-                className="card-image"
-                style={{
-                  position: "relative",
-                  bottom: 0,
-                  zIndex: index,
-                  marginLeft: index === 0 ? 0 : -40,
-                }}
-              />
-            ))}
+        {[0, 1, 2, 3].map((pIndex) => {
+          const action = lastActions[pIndex];
+          if (!action) return null;
+          
+          let style: React.CSSProperties = { position: "absolute", zIndex: 250 };
+          if (pIndex === 0) {
+            style.bottom = "28%"; 
+            style.left = "50%";
+            style.transform = "translateX(-50%)";
+          } else if (pIndex === 1) {
+            style.top = "40%";
+            style.left = "15%"; 
+            style.transform = "translateY(-50%)";
+          } else if (pIndex === 2) {
+             style.top = "25%";
+             style.left = "50%";
+             style.transform = "translateX(-50%)";
+          } else if (pIndex === 3) {
+             style.top = "40%";
+             style.right = "15%";
+             style.transform = "translateY(-50%)";
+          }
+
+          if (action.type === "pass") {
+             return (
+               <div key={`last-action-${pIndex}`} style={{...style, color: "#DDD", fontSize: "20px", fontWeight: "bold", background:"rgba(0,0,0,0.5)", padding:"4px 8px", borderRadius:"4px"}}>不要</div>
+             );
+          }
+          
+          return (
+             <div key={`last-action-${pIndex}`} style={{...style, display: "flex", alignItems: "center", justifyContent: "center"}}>
+                {action.cards.map((card, idx) => (
+                   <img 
+                     key={idx} 
+                     src={cardImagePath(card)} 
+                     style={{
+                        width: "60px", 
+                        height: "auto", 
+                        marginLeft: idx===0?0:"-40px", 
+                        borderRadius: "4px", 
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.5)"
+                     }} 
+                   />
+                ))}
+             </div>
+          );
+        })}
+
+        {gameOver && (
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 2000,
+            }}
+          >
+            <button
+              className="action-btn"
+              onClick={handleDeal}
+              style={{
+                width: "auto",
+                padding: "10px 40px",
+                fontSize: "24px",
+                background: "linear-gradient(to bottom, #4caf50, #45a049)",
+              }}
+            >
+              下一局
+            </button>
           </div>
-        ) : null}
+        )}
 
         <div className="hand-panel">
           <div className="hand-cards">
@@ -821,9 +953,9 @@ export function App() {
             ))}
           </div>
           <div className="hand-info">
-            <span>
-              手牌 {flatSelfCards.length} 张
-            </span>
+            {/*<span>*/}
+            {/*  手牌 {flatSelfCards.length} 张*/}
+            {/*</span>*/}
           </div>
         </div>
 
@@ -905,12 +1037,6 @@ export function App() {
           </button>
         </div>
 
-        <div id="victory-overlay">
-          <div id="victory-message">恭喜获胜</div>
-          <button id="restart-match-btn" type="button">
-            再来一局
-          </button>
-        </div>
       </div>
     </div>
   );
