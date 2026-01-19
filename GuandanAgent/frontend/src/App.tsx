@@ -53,6 +53,7 @@ export function App() {
   const [game, setGame] = useState<GameState | null>(null);
   const [hands, setHands] = useState<Record<string, Card[]>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isSplitMode, setIsSplitMode] = useState(false);
   const [originalSelfHand, setOriginalSelfHand] = useState<Card[] | null>(null);
   const [currentSelfHand, setCurrentSelfHand] = useState<Card[][] | null>(null);
   const [uploadState, setUploadState] = useState<LoadState>("idle");
@@ -749,11 +750,16 @@ export function App() {
                     type="checkbox"
                     checked={autoPlay}
                     onChange={(e) => setAutoPlay(e.target.checked)}
-                  />{" "}
-                  自动出牌
+                  />
+                  托管 (Auto Play)
                 </label>
                 <label>
-                  <input type="checkbox" /> 机器学习
+                  <input
+                    type="checkbox"
+                    checked={isSplitMode}
+                    onChange={(e) => setIsSplitMode(e.target.checked)}
+                  />
+                  拆牌模式 (Split Mode)
                 </label>
               </div>
             </>
