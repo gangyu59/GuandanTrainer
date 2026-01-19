@@ -298,6 +298,14 @@ function Game(playerCount, firstPlayerIndex = 0) {
       const winnerText = winner === 'self' ? '南北队' : '东西队';
       window.showVictoryOverlay(winnerText);
 
+	    // 通知自动学习系统
+	  if (window.notifyGameEnd) {
+		window.notifyGameEnd({
+		  winner: game.winner,
+		  round: game.roundCount
+		});
+	  }
+
       // ✅ 整局结束，等待玩家点击“再来一局”
       if (startBtnFinal) {
         startBtnFinal.disabled = false;

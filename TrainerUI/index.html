@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Guandan Trainer UI</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Guandan AI 训练控制台</h1>
+
+    <div class="section">
+      <label>数据来源：</label>
+      <label><input type="radio" name="dataSource" value="local" checked /> 本地数据库</label>
+      <label><input type="radio" name="dataSource" value="firebase" /> Firebase 云端</label>
+    </div>
+
+    <div class="section">
+      <label>训练轮数：</label>
+      <input id="epochInput" type="number" value="50" min="1" max="200" />
+    </div>
+
+    <div class="section">
+      <button id="startBtn">开始训练</button>
+      <button id="stopBtn">停止训练</button>
+      <button id="launchGameBtn">启动游戏</button>
+      <button id="autoLearningBtn">自动循环</button>
+    </div>
+
+    <div class="section">
+      <div class="progress-wrapper">
+        <div id="progressBar" class="progress-bar">0%</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <textarea id="statusOutput" rows="15" readonly></textarea>
+    </div>
+
+    <div class="section">
+      <div class="chart-card">
+        <div class="chart-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin-right: 8px;">
+            <path d="M3 17L9 11L13 15L21 7" stroke="#3498db" stroke-width="2" stroke-linecap="round"/>
+            <path d="M12 16L12 8" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          训练损失曲线
+        </div>
+        <canvas id="lossChart"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin-right: 8px;">
+            <rect x="3" y="8" width="4" height="12" fill="#9b59b6"/>
+            <rect x="10" y="4" width="4" height="16" fill="#9b59b6"/>
+            <rect x="17" y="12" width="4" height="8" fill="#9b59b6"/>
+          </svg>
+          动作分布直方图
+        </div>
+        <canvas id="chartCanvas"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin-right: 8px;">
+            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                  fill="#f1c40f" stroke="#f39c12" stroke-width="1.5"/>
+          </svg>
+          训练指标仪表盘
+        </div>
+        <canvas id="metricsChart"></canvas>
+      </div>
+    </div>
+
+    <div class="section">
+      <div id="dataCount">当前数据库样本数：0</div>
+    </div>
+
+  </div>
+
+  <script type="module" src="static/js/utils.js"></script>
+  <script type="module" src="static/js/chart.js"></script>
+  <script type="module" src="static/js/config.js"></script>
+  <script type="module" src="static/js/controller.js"></script>
+  <script type="module" src="static/js/statusPanel.js"></script>
+  <script type="module" src="static/js/main.js"></script>
+
+</body>
+</html>

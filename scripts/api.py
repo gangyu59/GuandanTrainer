@@ -1,16 +1,17 @@
-import asyncio
 import datetime
+import json  # 用于JSON序列化
+import os  # 用于路径操作
+import sqlite3
+import traceback  # 用于打印完整错误堆栈
 
+import torch
 from fastapi import APIRouter, Request
-import sqlite3, json, os, subprocess
 from fastapi.responses import JSONResponse
-from fastapi.encoders import jsonable_encoder
 
 from .downloader import load_data
-from .processor import clean_dataset, parse_dataset, analyze_meta
-from .trainer import train_model
 from .export import export_weights
-from .simple_mlp import SimpleMLP
+from .processor import clean_dataset, parse_dataset
+from .trainer import train_model
 
 router = APIRouter()
 
@@ -85,59 +86,109 @@ def append_log(msg):
         training_logs.pop(0)
 
 
+# @router.post("/train")
+# async def train_model_api(request: Request):
+#     try:
+#         config = await request.json()
+#         source = config.get("source", "local")
+#         epochs = int(config.get("epochs", 50))
+#
+#         status.update({
+#             "status": "training",
+#             "epoch": 0,
+#             "total": epochs,
+#             "metrics": {},
+#             "last_updated": datetime.datetime.now().isoformat()
+#         })
+#
+#         raw_data = load_data(source)
+#         cleaned_data = clean_dataset(raw_data)
+#         X, y, meta = parse_dataset(cleaned_data)
+#
+#         # 获取胜率和动作分布
+#         stats = analyze_meta(meta, y)  # 返回 winrate + action_dist
+#
+#         from scripts.simple_mlp import SimpleMLP
+#         model = train_model(X, y, epochs, status=status, log_callback=append_log)
+#
+#         # export_weights(model)
+#         export_weights(
+#             model,
+#             filepath='HappyGuandan/assets/ai/model_weights.json'  # 完整相对路径
+#         )
+#
+#         # 更新状态，包含样本数、胜率、动作分布
+#         action_dist = stats.get("action_dist")
+#         if action_dist:
+#             action_dist = {int(k): float(v) for k, v in action_dist.items()}  # 转换为可序列化格式
+#
+#         status.update({
+#             "status": "done",
+#             "metrics": {
+#                 "samples": len(X),
+#                 "winrate": float(stats.get("winrate", 0)),
+#                 "action_dist": action_dist,
+#                 "accuracy": float(stats.get("accuracy", 0)),
+#                 "entropy": float(stats.get("entropy", 0)),
+#             },
+#             "last_updated": datetime.datetime.now().isoformat()
+#         })
+#
+#         return {"status": "done"}
+#
+#     except Exception as e:
+#         status.update({
+#             "status": "error",
+#             "error": str(e),
+#             "last_updated": datetime.datetime.now().isoformat()
+#         })
+#         return {"error": str(e)}
+
+
 @router.post("/train")
 async def train_model_api(request: Request):
     try:
+        print("\n=== 调试开始 ===")
+
+        # 1. 基础检查
+        print("[1] 基本验证:")
+        print(f"- PyTorch版本: {torch.__version__}")
+        print(f"- CUDA可用: {torch.cuda.is_available()}")
+
+        # 2. 加载配置和数据
         config = await request.json()
-        source = config.get("source", "local")
-        epochs = int(config.get("epochs", 50))
+        print(f"[2] 配置: {config}")
 
-        status.update({
-            "status": "training",
-            "epoch": 0,
-            "total": epochs,
-            "metrics": {},
-            "last_updated": datetime.datetime.now().isoformat()
-        })
+        raw_data = load_data(config.get("source", "local"))
+        print(f"[3] 数据加载完成: 样本数={len(raw_data)}")
 
-        raw_data = load_data(source)
-        cleaned_data = clean_dataset(raw_data)
-        X, y, meta = parse_dataset(cleaned_data)
-
-        # 获取胜率和动作分布
-        stats = analyze_meta(meta, y)  # 返回 winrate + action_dist
-
+        # 3. 模型训练
         from scripts.simple_mlp import SimpleMLP
-        model = train_model(X, y, epochs, status=status, log_callback=append_log)
+        print("[4] 初始化模型...")
+        model = SimpleMLP(input_dim=340, output_dim=54)  # 硬编码维度仅用于测试
 
-        export_weights(model)
+        # [关键检查点] 训练前验证
+        print(f"[5] 模型验证:")
+        print(f"- 类型: {type(model)}")
+        print(f"- 参数键: {list(model.state_dict().keys())}")
+        print(f"- 设备: {next(model.parameters()).device}")
 
-        # 更新状态，包含样本数、胜率、动作分布
-        action_dist = stats.get("action_dist")
-        if action_dist:
-            action_dist = {int(k): float(v) for k, v in action_dist.items()}  # 转换为可序列化格式
+        # 4. 导出测试（跳过训练）
+        print("[6] 直接导出测试模型...")
+        export_weights(
+            model,
+            filepath='HappyGuandan/assets/ai/TEST_weights.json'  # 测试用路径
+        )
 
-        status.update({
-            "status": "done",
-            "metrics": {
-                "samples": len(X),
-                "winrate": float(stats.get("winrate", 0)),
-                "action_dist": action_dist,
-                "accuracy": float(stats.get("accuracy", 0)),
-                "entropy": float(stats.get("entropy", 0)),
-            },
-            "last_updated": datetime.datetime.now().isoformat()
-        })
-
-        return {"status": "done"}
+        return {"status": "测试导出成功"}
 
     except Exception as e:
-        status.update({
-            "status": "error",
-            "error": str(e),
-            "last_updated": datetime.datetime.now().isoformat()
-        })
-        return {"error": str(e)}
+        print(f"❌ 错误类型: {type(e).__name__}")
+        print(f"错误详情: {str(e)}")
+        print("堆栈跟踪:")
+        traceback.print_exc()
+        raise
+
 
 
 @router.get("/status")

@@ -56,8 +56,7 @@ GuandanTrainer/
 │   └── test_*.py              # ✅ 单元测试文件（按模块命名）
 │
 ├── requirements.txt
-└── README.md
-                # 项目说明文档
+└── README.md                  # 项目说明文档
 
 
 目标：

@@ -1,5 +1,127 @@
 //main.js
 
+// 游戏状态控制器
+class AutoPlayController {
+  constructor() {
+    this.attemptCount = 0;
+    this.maxAttempts = 5;
+  }
+
+  // 主执行方法
+  async start() {
+    console.log('[Auto] 开始自动设置流程');
+
+    await this.setCheckbox('auto-play', true);
+    await this.setCheckbox('ml-model', true);
+    await this.clickStartButton();
+
+    // 新增：启动数据记录
+    this.startDataRecording();
+
+    console.log('[Auto] 自动设置完成');
+  }
+
+  // 新增方法：定时记录数据
+  startDataRecording() {
+    console.log('[Auto] 启动1分钟数据记录');
+
+    // 立即执行第一次记录
+    this.recordData();
+
+    // 每3分钟记录一次
+    this.recordInterval = setInterval(() => {
+      this.recordData();
+    }, 60000); // 1分钟 = 60000毫秒
+  }
+
+  // 新增方法：执行数据记录
+  recordData() {
+    const btn = document.getElementById('upload-btn');
+    if (btn) {
+      console.log('[Auto] 执行数据记录');
+      btn.click();
+    } else {
+      console.warn('[Auto] 未找到记录按钮');
+    }
+  }
+
+  // 模拟勾选复选框
+  async setCheckbox(id, checked) {
+    return new Promise((resolve) => {
+      const retry = () => {
+        this.attemptCount++;
+        const checkbox = document.getElementById(id);
+
+        if (checkbox) {
+          console.log(`[Auto] 找到复选框 #${id}`);
+          checkbox.checked = checked;
+
+          // 触发change事件确保状态更新
+          const event = new Event('change', { bubbles: true });
+          checkbox.dispatchEvent(event);
+
+          resolve();
+        } else if (this.attemptCount < this.maxAttempts) {
+          console.warn(`[Auto] 未找到 #${id}，重试中...`);
+          setTimeout(retry, 500);
+        } else {
+          console.error(`[Auto] 无法设置 #${id}`);
+          resolve();
+        }
+      };
+
+      retry();
+    });
+  }
+
+  // 模拟点击开始按钮
+  async clickStartButton() {
+    return new Promise((resolve) => {
+      const retry = () => {
+        this.attemptCount++;
+        const btn = document.getElementById('start-btn');
+
+        if (btn && !btn.disabled) {
+          console.log('[Auto] 点击开始按钮');
+          btn.click();
+          resolve();
+        } else if (this.attemptCount < this.maxAttempts) {
+          console.warn('[Auto] 开始按钮不可用，重试中...');
+          setTimeout(retry, 500);
+        } else {
+          console.error('[Auto] 无法点击开始按钮');
+          resolve();
+        }
+      };
+
+      retry();
+    });
+  }
+}
+
+// 消息监听器
+window.addEventListener('message', (event) => {
+  if (event.data.type === 'START_AUTO_PLAY') {
+    console.log('[Auto] 收到自动开始指令');
+    const controller = new AutoPlayController();
+    controller.start();
+  }
+});
+
+// 通知父窗口准备就绪
+setTimeout(() => {
+  try {
+    window.opener?.postMessage({
+      type: 'GAME_READY',
+      ready: true
+    }, window.opener.location.origin);
+  } catch (e) {
+    console.error('初始化通知失败:', e);
+  }
+}, 2000);
+
+
+
 // 全局游戏实例
 var game;
 window.gameEnded = true;
@@ -274,7 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	  try {
 	    if (window.dataLogger) {
 	      await window.dataLogger.saveToSQLite(); // ✅ await window.dataLogger.uploadToFirebase();
-	      alert('✅ 数据上传成功！');
+	      console.log('✅ 数据上传成功！');
 	    } else {
 	      alert('⚠️ 当前 dataLogger 未初始化');
 	    }

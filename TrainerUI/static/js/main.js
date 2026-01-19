@@ -2,7 +2,7 @@ import { getConfig } from './config.js';
 import { updateStatus, setProgress, setTraining, appendToStatus } from './statusPanel.js';
 import { fetchJSON } from './utils.js';
 import { refreshDataCount } from './controller.js';
-import { updateLossChart, drawActionChart,} from "./chart.js";
+import {updateLossChart, drawActionChart, updateMetricsChart,} from "./chart.js";
 
 
 let trainingInProgress = false;
