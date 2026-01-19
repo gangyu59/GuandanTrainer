@@ -376,3 +376,64 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
                 moves.append(winning_bombs[0])
 
     return moves
+
+def calculate_hand_strength(hand: List[Any]) -> Dict[str, Any]:
+    """
+    Evaluate hand strength for heuristics and UI display.
+    Returns a dict with score and details.
+    """
+    sorted_hand = sort_hand(hand)
+    grouped = group_cards(sorted_hand)
+    
+    score = 0
+    details = []
+    
+    # 1. Base Card Values
+    # 3-10: Low
+    # J-A: Medium
+    # 2: High (Level Card, assume 2 for now as we don't track level yet)
+    # SJ/BJ: Top
+    
+    total_card_value = 0
+    for card in sorted_hand:
+        val = get_rank_value(card.rank)
+        if val >= 20: # Jokers
+            score += 4
+            total_card_value += 10
+        elif val == 2: # Level Card (Approx)
+            score += 3
+            total_card_value += 8
+        elif val >= 14: # A
+            score += 2
+            total_card_value += 6
+        elif val >= 11: # J, Q, K
+            score += 1
+            total_card_value += 4
+        else:
+            total_card_value += 1
+            
+    # 2. Structure Values (Bombs)
+    bombs = [cards for cards in grouped.values() if len(cards) >= 4]
+    kings = [c for c in sorted_hand if c.rank in ['SJ', 'BJ']]
+    if len(kings) == 4:
+        bombs.append(kings)
+        
+    straight_flushes = find_straight_flushes(sorted_hand)
+    
+    num_bombs = len(bombs) + len(straight_flushes)
+    score += num_bombs * 10
+    
+    # 3. Penalties
+    # Many single small cards are bad
+    singles = [k for k, v in grouped.items() if len(v) == 1 and get_rank_value(k) < 10]
+    score -= len(singles) * 1
+    
+    # 4. Hand Count (Fewer is better usually, but context matters)
+    # Here we just evaluate "Material Strength"
+    
+    return {
+        "score": score,
+        "num_bombs": num_bombs,
+        "total_card_value": total_card_value,
+        "desc": f"Score: {score} (Bombs: {num_bombs})"
+    }

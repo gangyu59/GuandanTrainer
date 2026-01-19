@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from engine.cards import Rank, Suit, Card
 from engine.logic import (
     sort_hand, group_cards, get_legal_moves, get_rank_value, 
-    get_bomb_score, get_rank_from_card
+    get_bomb_score, get_rank_from_card, calculate_hand_strength
 )
 from engine.rl.env import GuandanEnv
 from engine.rl.mcts import MCTSNode, MCTS
@@ -161,16 +161,27 @@ def mcts_strategy(state: Any) -> Dict[str, Any]:
         moves = get_legal_moves(my_hand, last_play)
         if moves:
             best_action = moves[0]
+            hand_eval = calculate_hand_strength(my_hand)
             return {
                 **best_action,
-                "message": "Fallback: First Legal Move",
-                "reasoning": "MCTS failed or found no better option"
+                "message": f"Fallback: First Legal Move (Hand Score: {hand_eval['score']})",
+                "reasoning": f"MCTS failed. Hand Strength: {hand_eval['desc']}"
             }
         return {"action": "pass", "cards": [], "message": "No legal moves (MCTS Fallback)"}
         
+    # Add Hand Strength Info
+    hand_eval = calculate_hand_strength(my_hand)
+    win_rate_pct = best_action.get('win_rate', 0.5) * 100
+    visits = best_action.get('visits', 0)
+    
     return {
         **best_action,
-        "message": f"MCTS Selected: {best_action.get('desc', 'Unknown')}",
-        "reasoning": "Selected via Monte Carlo Tree Search simulation (AlphaGo style)"
+        "message": f"MCTS: {best_action.get('desc', 'Unknown')} (WinRate: {win_rate_pct:.1f}%)",
+        "reasoning": (
+            f"Selected via MCTS ({visits} visits). "
+            f"Estimated Win Rate: {win_rate_pct:.1f}%. "
+            f"Current Hand Strength: {hand_eval['score']} (Bombs: {hand_eval['num_bombs']}). "
+            f"Strategy prefers playing small cards to gain tempo."
+        )
     }
 

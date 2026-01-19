@@ -93,7 +93,21 @@ class MCTS:
             
         # Select best action (robust child: most visits)
         best_child = max(root_node.children.values(), key=lambda c: c.visits)
-        return best_child.action
+        
+        # Add metrics to action
+        action = best_child.action.copy()
+        
+        # Calculate win rate from P0 perspective
+        # best_child.value is sum of +1/-1.
+        # win_rate = (value / visits + 1) / 2  -> range [0, 1]
+        avg_val = best_child.value / best_child.visits
+        win_rate = (avg_val + 1) / 2
+        
+        action['win_rate'] = win_rate
+        action['visits'] = best_child.visits
+        action['iterations'] = iterations
+        
+        return action
 
     def expand(self, node: MCTSNode) -> MCTSNode:
         action = node.untried_actions.pop()
@@ -103,7 +117,8 @@ class MCTS:
         
         # Use a unique key for the action
         # Combining type, cards ranks/suits
-        key = f"{action['type']}_{len(action['cards'])}_{random.randint(0,10000)}"
+        # Add a random component to key to handle duplicate actions if any (though unlikely with strict dict)
+        key = f"{action['type']}_{len(action['cards'])}_{random.randint(0,100000)}"
         node.children[key] = child_node
         return child_node
 
@@ -118,10 +133,8 @@ class MCTS:
             if not actions:
                 break
             
-            # Random policy
-            # Optimization: Prefer playing cards over passing if possible?
-            # Or just pure random. Pure random is "stupid" but unbiased.
-            action = random.choice(actions)
+            # Heuristic Policy
+            action = self._heuristic_policy(actions)
             
             _, reward, done, _ = current_state.step(action)
             if done:
@@ -129,6 +142,28 @@ class MCTS:
             depth += 1
             
         return 0 # Draw/Cutoff
+
+    def _heuristic_policy(self, actions: List[Dict]) -> Dict:
+        """
+        Bias towards playing cards (especially small ones) over passing.
+        Assume actions are sorted by get_legal_moves (smallest first).
+        """
+        play_actions = [a for a in actions if a['action'] != 'pass']
+        pass_action = next((a for a in actions if a['action'] == 'pass'), None)
+        
+        # If must pass or no moves
+        if not play_actions:
+            return actions[0]
+            
+        # If can play
+        # 90% chance to play if available
+        if pass_action and random.random() < 0.1:
+            return pass_action
+            
+        # Pick from top 3 smallest moves (Logic returns sorted moves)
+        # This simulates "Rational" play (not wasting big cards)
+        candidates = play_actions[:3]
+        return random.choice(candidates)
 
     def backpropagate(self, node: MCTSNode, result: float):
         while node:
