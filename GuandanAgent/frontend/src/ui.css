@@ -247,6 +247,12 @@ input[type="checkbox"] {
   color: #444;
 }
 
+#scoreboard .team.highlight {
+  background: rgba(144, 238, 144, 0.9); /* Light Green */
+  box-shadow: 0 0 10px #4CAF50;
+  border: 2px solid #2E7D32;
+}
+
 #scoreboard .team-score {
   font-size: 14px;
   font-weight: bold;

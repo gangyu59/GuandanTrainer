@@ -45,6 +45,15 @@ function cardImagePath(card: Card): string {
   return `/cards/${suitChar}_${card.rank}.jpeg`;
 }
 
+export function formatLevel(level: number): string {
+  if (level <= 10) return level.toString();
+  if (level === 11) return "J";
+  if (level === 12) return "Q";
+  if (level === 13) return "K";
+  if (level === 14) return "A";
+  return level.toString();
+}
+
 export function App() {
   const [healthState, setHealthState] = useState<LoadState>("idle");
   const [healthMessage, setHealthMessage] = useState<string | null>(null);
@@ -69,6 +78,12 @@ export function App() {
   const [passCount, setPassCount] = useState(0);
   const [finishedPlayers, setFinishedPlayers] = useState<number[]>([]);
   const [gameOver, setGameOver] = useState(false);
+  const [matchOver, setMatchOver] = useState(false);
+
+  // Level & Scoreboard State
+  const [teamLevels, setTeamLevels] = useState<{ self: number; opponent: number }>({ self: 2, opponent: 2 });
+  const [currentStartPlayer, setCurrentStartPlayer] = useState(0); // Who started CURRENT game
+  const [nextStartPlayer, setNextStartPlayer] = useState(0); // Who starts NEXT game
 
   const players = game?.players ?? ["P0", "P1", "P2", "P3"];
   const selfId = players[0];
@@ -115,7 +130,41 @@ export function App() {
     pingHealth();
   }, []);
 
-  async function handleDeal() {
+  async function handleRestartMatch() {
+    setTeamLevels({ self: 2, opponent: 2 });
+    setNextStartPlayer(0);
+    setMatchOver(false);
+    // After state update, handleDeal will use reset values? 
+    // Wait, handleDeal reads state. State updates are async. 
+    // Better to explicitly reset in handleDeal or pass params.
+    // Actually handleDeal uses nextStartPlayer state. 
+    // We should probably chain this.
+    
+    // Simplest way: manually trigger a deal with initial params.
+    // But handleDeal fetches from server. 
+    // We just need to reset local state before calling deal.
+    // Let's rely on React batching or just call handleDeal in a way that respects the reset.
+    // However, handleDeal uses `nextStartPlayer` from state.
+    // So we should update state, then wait? 
+    // Or just modify handleDeal to accept an optional start player override.
+    // But for now, let's just update state and call deal. 
+    // React state updates might not be immediate. 
+    // Let's modify handleDeal to read from refs? Or just use a separate effect?
+    // Or simpler: handleDeal logic reads `nextStartPlayer`. 
+    // If we want to restart, we can just reload the page? No, bad UX.
+    
+    // Let's reset the levels and start player, and then call a modified deal or just force it.
+    // Actually, `handleDeal` uses `nextStartPlayer`.
+    // If I set `nextStartPlayer(0)` here, `handleDeal` might still see old value if called immediately.
+    // I'll wrap the deal call in a setTimeout or use a ref. 
+    // But actually, for restart, we want P0 to start? Or random?
+    // Usually P0 or random. Let's say P0.
+    
+    // I will modify handleDeal to accept an override.
+    await handleDeal(true);
+  }
+
+  async function handleDeal(isRestart = false) {
     setDealState("loading");
     setDealError(null);
     try {
@@ -131,6 +180,27 @@ export function App() {
       const data = (await response.json()) as GameState;
       setGame(data);
       setHands(data.hands);
+
+      // Determine start player and levels
+      let startP = nextStartPlayer;
+      let levels = teamLevels;
+      
+      if (isRestart) {
+        startP = 0;
+        levels = { self: 2, opponent: 2 };
+        // We need to update state too so UI reflects it
+        setTeamLevels(levels);
+        setNextStartPlayer(startP);
+        setMatchOver(false);
+      }
+
+      // Set Trump based on starting team's level
+      const isSelfTeam = [0, 2].includes(startP);
+      const level = isSelfTeam ? levels.self : levels.opponent;
+      const trumpRank = formatLevel(level) as Rank;
+      cardRules.setTrump(trumpRank);
+      console.log(`New Game: StartPlayer=P${startP}, Level=${level}, Trump=${trumpRank}`);
+
       const selfIdFromDeal = data.players[0];
       const selfHandFromDeal = data.hands?.[selfIdFromDeal] ?? [];
       setOriginalSelfHand(selfHandFromDeal);
@@ -139,7 +209,11 @@ export function App() {
       setCurrentSelfHand(grouped);
       setUploadState("idle");
       setDealState("success");
-      setCurrentPlayerIndex(0);
+      
+      // Use nextStartPlayer to determine who starts
+      setCurrentPlayerIndex(startP);
+      setCurrentStartPlayer(startP);
+
       setLastPlay(null);
       setLastActions({});
       setPassCount(0);
@@ -177,10 +251,26 @@ export function App() {
 
   function checkGameOverLocal(nextHands: Record<string, Card[]>): boolean {
     const total = players.length;
-    const finished = players.filter((id) => (nextHands[id] ?? []).length === 0);
-    if (finished.length >= total - 1) {
+    const finishedIndices = players
+      .map((id, index) => ({ id, index }))
+      .filter(({ id }) => (nextHands[id] ?? []).length === 0)
+      .map(({ index }) => index);
+
+    // Rule 1: 3 players finished
+    if (finishedIndices.length >= total - 1) {
       return true;
     }
+
+    // Rule 2: Team 0/2 finished (Double Up)
+    if (finishedIndices.includes(0) && finishedIndices.includes(2)) {
+      return true;
+    }
+
+    // Rule 3: Team 1/3 finished (Double Up)
+    if (finishedIndices.includes(1) && finishedIndices.includes(3)) {
+      return true;
+    }
+
     return false;
   }
 
@@ -234,6 +324,12 @@ export function App() {
         decision = { type, cards: group };
         break;
       }
+    }
+
+    // Fallback: If leading and no move found (rare/bug), play smallest single to avoid infinite pass loop
+    if (decision.type === "pass" && !last && cards.length > 0) {
+      const sorted = cardRules.sortCards(cards);
+      decision = { type: "1", cards: [sorted[sorted.length - 1]] };
     }
 
     if (decision.type === "pass") {
@@ -541,6 +637,13 @@ export function App() {
   function handlePass() {
     if (!game || gameOver) return;
     if (currentPlayerIndex !== 0 && !autoPlay) return;
+    
+    // Cannot pass if you are the leader of the trick (lastPlay is null)
+    if (lastPlay === null) {
+      alert("你是头家，必须出牌，不能过牌");
+      return;
+    }
+
     const activeCount = players.length - finishedPlayers.length;
     const newPass = passCount + 1;
     let clearedLast = lastPlay;
@@ -675,8 +778,45 @@ export function App() {
   }
 
   useEffect(() => {
-    if (!game || gameOver) return;
+    if (gameOver) {
+      // Calculate levels
+      const remaining = [0, 1, 2, 3].filter(p => !finishedPlayers.includes(p));
+      const finalOrder = [...finishedPlayers, ...remaining];
+      
+      if (finalOrder.length === 4) {
+        const firstPlace = finalOrder[0];
+        const partner = (firstPlace + 2) % 4;
+        const partnerRank = finalOrder.indexOf(partner); // 0-based index
+        
+        let levelGain = 1; // Default
+        if (partnerRank === 1) levelGain = 3; // Partner is 2nd (Double Up)
+        else if (partnerRank === 2) levelGain = 2; // Partner is 3rd
 
+        const isSelfTeam = firstPlace === 0 || firstPlace === 2;
+        
+        setTeamLevels(prev => {
+          const next = {
+            self: isSelfTeam ? prev.self + levelGain : prev.self,
+            opponent: !isSelfTeam ? prev.opponent + levelGain : prev.opponent
+          };
+          
+          // Check for Match Over (Level > 14 / A)
+          // Actually "passed A" means > 14. 
+          // HappyGuandan usually ends when > 14.
+          if (next.self > 14 || next.opponent > 14) {
+            setMatchOver(true);
+          }
+          
+          return next;
+        });
+
+        setNextStartPlayer(firstPlace);
+      }
+    }
+  }, [gameOver]); // Run once when gameOver becomes true
+
+  useEffect(() => {
+    if (!game || gameOver) return;
     if (currentPlayerIndex === 0) {
       if (autoPlay) {
         const timer = setTimeout(() => {
@@ -796,13 +936,13 @@ export function App() {
         </div>
 
         <div id="scoreboard">
-          <div className="team self">
+          <div className={`team self ${[0, 2].includes(currentStartPlayer) ? "highlight" : ""}`}>
             <div className="team-name">己方</div>
-            <div className="team-score">2</div>
+            <div className="team-score">{formatLevel(teamLevels.self)}</div>
           </div>
-          <div className="team opponent">
+          <div className={`team opponent ${[1, 3].includes(currentStartPlayer) ? "highlight" : ""}`}>
             <div className="team-name">对方</div>
-            <div className="team-score">2</div>
+            <div className="team-score">{formatLevel(teamLevels.opponent)}</div>
           </div>
         </div>
 
@@ -892,7 +1032,7 @@ export function App() {
           );
         })}
 
-        {gameOver && (
+        {gameOver && !matchOver && (
           <div
             style={{
               position: "absolute",
@@ -904,7 +1044,7 @@ export function App() {
           >
             <button
               className="action-btn"
-              onClick={handleDeal}
+              onClick={() => handleDeal(false)}
               style={{
                 width: "auto",
                 padding: "10px 40px",
@@ -913,6 +1053,46 @@ export function App() {
               }}
             >
               下一局
+            </button>
+          </div>
+        )}
+
+        {matchOver && (
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 2000,
+              background: "rgba(0,0,0,0.85)",
+              padding: "40px",
+              borderRadius: "16px",
+              color: "white",
+              textAlign: "center",
+              border: "2px solid gold",
+              boxShadow: "0 0 20px gold"
+            }}
+          >
+            <h1 style={{ margin: "0 0 20px 0", fontSize: "36px", color: "#FFD700" }}>
+              {teamLevels.self > 14 ? "己方获胜！" : "对方获胜！"}
+            </h1>
+            <div style={{ fontSize: "24px", marginBottom: "30px" }}>
+              最终比分: {formatLevel(teamLevels.self)} : {formatLevel(teamLevels.opponent)}
+            </div>
+            <button
+              className="action-btn"
+              onClick={handleRestartMatch}
+              style={{
+                width: "auto",
+                padding: "10px 40px",
+                fontSize: "24px",
+                background: "linear-gradient(to bottom, #FFD700, #FFC107)",
+                color: "#333",
+                fontWeight: "bold"
+              }}
+            >
+              下一轮
             </button>
           </div>
         )}
@@ -1017,7 +1197,7 @@ export function App() {
           <button
             id="pass-btn"
             type="button"
-            disabled={!game || gameOver || currentPlayerIndex !== 0}
+            disabled={!game || gameOver || currentPlayerIndex !== 0 || lastPlay === null}
             onClick={handlePass}
           >
             过牌
