@@ -75,6 +75,50 @@ export function App() {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [lastPlay, setLastPlay] = useState<LegacyLastPlay>(null);
   const [lastActions, setLastActions] = useState<Record<number, { cards: Card[]; type: string } | null>>({});
+  const [showAIModal, setShowAIModal] = useState(true);
+  const [aiLog, setAiLog] = useState<{ reasoning: string, message: string } | null>(null);
+
+  // Draggable Modal State
+  const [aiModalPos, setAiModalPos] = useState({ x: window.innerWidth - 420, y: window.innerHeight - 500 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    // Adjust initial position to be visible
+    setAiModalPos({ x: window.innerWidth - 420, y: window.innerHeight - 500 });
+  }, []);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragOffset({
+      x: e.clientX - aiModalPos.x,
+      y: e.clientY - aiModalPos.y
+    });
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        setAiModalPos({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
   const [passCount, setPassCount] = useState(0);
   const [finishedPlayers, setFinishedPlayers] = useState<number[]>([]);
   const [gameOver, setGameOver] = useState(false);
@@ -324,6 +368,14 @@ export function App() {
 
         if (response.ok) {
             const data = await response.json();
+            
+            if (data.reasoning) {
+                setAiLog({
+                  reasoning: data.reasoning,
+                  message: data.message || "AI Thought Process"
+                });
+            }
+
             if (data.action === "play" && data.cards && data.cards.length > 0) {
                 // Determine type locally or trust backend? 
                 // For now, let's verify locally to be safe.
@@ -1270,6 +1322,106 @@ export function App() {
             出牌
           </button>
         </div>
+
+      <button 
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          zIndex: 3000,
+          padding: '10px 20px',
+          backgroundColor: '#2196F3',
+          color: 'white',
+          border: 'none',
+          borderRadius: '5px',
+          cursor: 'pointer',
+          boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+          display: showAIModal ? 'none' : 'block'
+        }}
+        onClick={() => setShowAIModal(true)}
+      >
+        Show AI Logic
+      </button>
+
+      {showAIModal && (
+        <div style={{
+          position: 'fixed',
+          top: aiModalPos.y,
+          left: aiModalPos.x,
+          width: '400px',
+          maxHeight: '500px',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          zIndex: 3001,
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: '10px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+          border: '1px solid #ccc',
+          overflow: 'hidden'
+        }}>
+          {/* Header */}
+          <div 
+            style={{
+              padding: '10px',
+              backgroundColor: '#2196F3',
+              color: 'white',
+              cursor: 'move',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              userSelect: 'none'
+            }}
+            onMouseDown={handleMouseDown}
+          >
+            <span style={{ fontWeight: 'bold' }}>AI Logic Analysis</span>
+            <button 
+              onClick={() => setShowAIModal(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'white',
+                fontSize: '18px',
+                cursor: 'pointer'
+              }}
+            >
+              ×
+            </button>
+          </div>
+          
+          {/* Content */}
+          <div style={{
+            padding: '15px',
+            overflowY: 'auto',
+            flex: 1,
+            maxHeight: '450px'
+          }}>
+            {aiLog ? (
+              <div>
+                <div style={{ marginBottom: '10px', fontWeight: 'bold', color: '#333' }}>
+                  Decision: {aiLog.message}
+                </div>
+                <div style={{ 
+                  whiteSpace: 'pre-wrap', 
+                  backgroundColor: '#f5f5f5', 
+                  padding: '10px', 
+                  borderRadius: '5px',
+                  fontFamily: 'monospace',
+                  fontSize: '13px',
+                  lineHeight: '1.5',
+                  color: '#444'
+                }}>
+                  {aiLog.reasoning}
+                </div>
+              </div>
+            ) : (
+              <p style={{ color: '#666', fontStyle: 'italic' }}>
+                Waiting for AI turn... <br/>
+                (Reasoning will appear here)
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       </div>
     </div>

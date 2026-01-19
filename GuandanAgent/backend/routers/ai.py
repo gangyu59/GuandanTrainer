@@ -20,6 +20,7 @@ class MoveResponse(BaseModel):
     action: str # "play" or "pass"
     cards: List[CardModel]
     message: Optional[str] = None
+    reasoning: Optional[str] = None
 
 @router.post("/suggest_move", response_model=MoveResponse)
 async def suggest_move(state: GameStateModel):
@@ -37,9 +38,9 @@ async def suggest_move(state: GameStateModel):
         # If I have cards, play the first one as a single. 
         # If I have no cards, pass (shouldn't happen if game logic is right).
         
-        from engine.ai_strategy import simple_greedy_strategy
+        from engine.ai_strategy import llm_strategy
         
-        decision = simple_greedy_strategy(state)
+        decision = llm_strategy(state)
         return decision
 
     except Exception as e:
