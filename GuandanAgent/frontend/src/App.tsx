@@ -76,7 +76,9 @@ export function App() {
   const [lastPlay, setLastPlay] = useState<LegacyLastPlay>(null);
   const [lastActions, setLastActions] = useState<Record<number, { cards: Card[]; type: string } | null>>({});
   const [showAIModal, setShowAIModal] = useState(true);
-  const [aiLog, setAiLog] = useState<{ reasoning: string, message: string } | null>(null);
+  const [aiLogs, setAiLogs] = useState<Array<{ reasoning: string, message: string, timestamp: number }>>([]);
+  const logsEndRef = React.useRef<HTMLDivElement>(null);
+  const [lastRecommendedCards, setLastRecommendedCards] = useState<Card[] | null>(null);
 
   // Draggable Modal State
   const [aiModalPos, setAiModalPos] = useState({ x: window.innerWidth - 420, y: window.innerHeight - 500 });
@@ -344,6 +346,10 @@ export function App() {
       return;
     }
 
+    // AI Speed Optimization: No artificial delay
+    // We used to have setTimeout here, but user wants it fast.
+    // The backend latency is the main factor now.
+    
     // Call Backend AI
     let decision: { type: string; cards: Card[] } | { type: "pass" } = { type: "pass" };
     
@@ -370,16 +376,56 @@ export function App() {
             const data = await response.json();
             
             if (data.reasoning) {
-                setAiLog({
+                setAiLogs(prev => [...prev, {
                   reasoning: data.reasoning,
-                  message: data.message || "AI Thought Process"
-                });
+                  message: data.message || "AI Thought Process",
+                  timestamp: Date.now()
+                }]);
+                // Scroll to bottom after state update
+                setTimeout(() => {
+                    if (logsEndRef.current) {
+                        logsEndRef.current.scrollIntoView({ behavior: "smooth" });
+                    }
+                }, 100);
             }
 
             if (data.action === "play" && data.cards && data.cards.length > 0) {
                 // Determine type locally or trust backend? 
                 // For now, let's verify locally to be safe.
                 const backendCards = data.cards;
+                
+                // Recommendation Logic: Highlight cards if not auto-playing
+                if (!autoPlay) {
+                    setLastRecommendedCards(backendCards);
+                    // Find indices in selfCards that match backendCards
+                    const newSelected = new Set<string>();
+                    
+                    // Helper to match cards. We need to match by suit and rank.
+                    // selfGroups is array of array of cards.
+                    // We iterate through selfGroups and pick matching cards until we satisfy the backendCards count.
+                    // Since backendCards are specific cards (suit/rank), we need to find exact matches.
+                    // However, we might have multiple identical cards (e.g. 2 Heart 5s).
+                    // We need to keep track of used indices to avoid double counting.
+                    
+                    const needed = [...backendCards];
+                    const foundIndices = new Set<string>();
+                    
+                    selfGroups.forEach((group, gIdx) => {
+                        group.forEach((card, cIdx) => {
+                            const neededIndex = needed.findIndex(n => n.suit === card.suit && n.rank === card.rank);
+                            if (neededIndex !== -1) {
+                                // Found a match
+                                newSelected.add(`${gIdx}-${cIdx}`);
+                                needed.splice(neededIndex, 1); // Remove from needed
+                            }
+                        });
+                    });
+                    
+                    setSelectedIndices(newSelected);
+                    // Also select the group if all cards in group are selected? 
+                    // No, existing logic uses selectedIndices for individual cards.
+                }
+
                 const type = cardRules.getCardType(backendCards);
                 if (type) {
                      // Verify if valid move
@@ -1340,7 +1386,7 @@ export function App() {
         }}
         onClick={() => setShowAIModal(true)}
       >
-        Show AI Logic
+        显示AI推理
       </button>
 
       {showAIModal && (
@@ -1373,7 +1419,7 @@ export function App() {
             }}
             onMouseDown={handleMouseDown}
           >
-            <span style={{ fontWeight: 'bold' }}>AI Logic Analysis</span>
+            <span style={{ fontWeight: 'bold' }}>AI推理和推荐</span>
             <button 
               onClick={() => setShowAIModal(false)}
               style={{
@@ -1393,30 +1439,38 @@ export function App() {
             padding: '15px',
             overflowY: 'auto',
             flex: 1,
-            maxHeight: '450px'
+            maxHeight: '450px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '15px'
           }}>
-            {aiLog ? (
-              <div>
-                <div style={{ marginBottom: '10px', fontWeight: 'bold', color: '#333' }}>
-                  Decision: {aiLog.message}
-                </div>
-                <div style={{ 
-                  whiteSpace: 'pre-wrap', 
-                  backgroundColor: '#f5f5f5', 
-                  padding: '10px', 
-                  borderRadius: '5px',
-                  fontFamily: 'monospace',
-                  fontSize: '13px',
-                  lineHeight: '1.5',
-                  color: '#444'
-                }}>
-                  {aiLog.reasoning}
-                </div>
-              </div>
+            {aiLogs.length > 0 ? (
+              <>
+                {aiLogs.map((log, index) => (
+                  <div key={index} style={{ borderBottom: index < aiLogs.length - 1 ? '1px solid #eee' : 'none', paddingBottom: '10px' }}>
+                    <div style={{ marginBottom: '5px', fontWeight: 'bold', color: '#333', fontSize: '12px' }}>
+                      {new Date(log.timestamp).toLocaleTimeString()} - {log.message}
+                    </div>
+                    <div style={{ 
+                      whiteSpace: 'pre-wrap', 
+                      backgroundColor: index === aiLogs.length - 1 ? '#e3f2fd' : '#f5f5f5', 
+                      padding: '10px', 
+                      borderRadius: '5px',
+                      fontFamily: 'monospace',
+                      fontSize: '13px',
+                      lineHeight: '1.5',
+                      color: '#444'
+                    }}>
+                      {log.reasoning}
+                    </div>
+                  </div>
+                ))}
+                <div ref={logsEndRef} />
+              </>
             ) : (
               <p style={{ color: '#666', fontStyle: 'italic' }}>
-                Waiting for AI turn... <br/>
-                (Reasoning will appear here)
+                等待AI思考... <br/>
+                (推理过程将显示在这里)
               </p>
             )}
           </div>

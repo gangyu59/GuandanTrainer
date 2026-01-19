@@ -19,6 +19,7 @@ class GameStateModel(BaseModel):
 class MoveResponse(BaseModel):
     action: str # "play" or "pass"
     cards: List[CardModel]
+    type: Optional[str] = None # "1", "2", "3", "bomb", etc.
     message: Optional[str] = None
     reasoning: Optional[str] = None
 
