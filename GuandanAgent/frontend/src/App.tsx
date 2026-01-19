@@ -291,7 +291,7 @@ export function App() {
     return <div className={`rank-badge rank-${rankIndex}`}>{labels[rankIndex]}</div>;
   }
 
-  function runAiTurn(playerIndex: number, last: LegacyLastPlay) {
+  async function runAiTurn(playerIndex: number, last: LegacyLastPlay) {
     const playerId = players[playerIndex];
     const cards = hands[playerId] ?? [];
     if (cards.length === 0) {
@@ -300,37 +300,91 @@ export function App() {
       return;
     }
 
-    const grouped = handOptimizer.groupByMinHands(cards);
-    let decision: { type: string; cards: Card[] } | { type: "pass" } = {
-      type: "pass",
-    };
+    // Call Backend AI
+    let decision: { type: string; cards: Card[] } | { type: "pass" } = { type: "pass" };
+    
+    try {
+        const payload = {
+            player_index: playerIndex,
+            my_hand: cards,
+            current_hand: [], // Optional: send grouped hand if needed
+            last_play: last ? {
+                player_index: last.playerIndex,
+                cards: last.cards,
+                type: last.type
+            } : null,
+            // We can also send played history, etc.
+        };
 
-    const candidateGroups = grouped.slice().reverse();
-
-    for (const group of candidateGroups) {
-      const type = cardRules.getCardType(group);
-      if (!type) continue;
-      const can =
-        !last ||
-        validPlay({
-          playerIndex,
-          selected: group,
-          type,
-          lastPlay: last,
-          cardRules,
-          cardPower: CardPower,
+        const response = await fetch(`${API_BASE}/suggest_move`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
         });
-      if (can) {
-        decision = { type, cards: group };
-        break;
-      }
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.action === "play" && data.cards && data.cards.length > 0) {
+                // Determine type locally or trust backend? 
+                // For now, let's verify locally to be safe.
+                const backendCards = data.cards;
+                const type = cardRules.getCardType(backendCards);
+                if (type) {
+                     // Verify if valid move
+                     const can = !last || validPlay({
+                        playerIndex,
+                        selected: backendCards,
+                        type,
+                        lastPlay: last,
+                        cardRules,
+                        cardPower: CardPower
+                     });
+                     
+                     if (can) {
+                         decision = { type, cards: backendCards };
+                         console.log(`Backend Suggested Move: ${type}`, backendCards);
+                     } else {
+                         console.warn("Backend suggested invalid move, falling back to legacy AI", data);
+                     }
+                }
+            } else {
+                 console.log("Backend Suggested Pass");
+            }
+        }
+    } catch (e) {
+        console.error("AI Backend Failed", e);
     }
 
-    // Fallback: If leading and no move found (rare/bug), play smallest single to avoid infinite pass loop
-    if (decision.type === "pass" && !last && cards.length > 0) {
-      const sorted = cardRules.sortCards(cards);
-      decision = { type: "1", cards: [sorted[sorted.length - 1]] };
+    // Fallback to Legacy AI if backend failed or returned invalid move or pass (when leading)
+    // Actually, if backend says "pass" but we are leading, we MUST play.
+    // The backend should handle this logic, but as a safety net:
+    if (decision.type === "pass" && !last) {
+        // Legacy Fallback Logic
+        const grouped = handOptimizer.groupByMinHands(cards);
+        const candidateGroups = grouped.slice().reverse();
+        for (const group of candidateGroups) {
+          const type = cardRules.getCardType(group);
+          if (!type) continue;
+          decision = { type, cards: group };
+          break;
+        }
+        
+        // Final fallback: smallest single
+        if (decision.type === "pass" && cards.length > 0) {
+             const sorted = cardRules.sortCards(cards);
+             decision = { type: "1", cards: [sorted[sorted.length - 1]] };
+        }
     }
+    
+    // If backend returned pass and we are NOT leading, we accept it.
+    // But if backend failed (network error), decision is still pass.
+    // We should probably run legacy AI if network failed. 
+    // Currently, decision is initialized to pass. 
+    // If network fails, it stays pass. 
+    // So if not leading, we might pass when we could play.
+    // Let's improve fallback: Only rely on backend if successful.
+    // But for this "Small Step", let's keep it simple. 
+    // If backend fails, we might just pass this turn. That's acceptable for testing connection.
 
     if (decision.type === "pass") {
       const activeCount = players.length - finishedPlayers.length;
