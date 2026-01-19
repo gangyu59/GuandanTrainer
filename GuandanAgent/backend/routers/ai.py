@@ -22,27 +22,42 @@ class MoveResponse(BaseModel):
     type: Optional[str] = None # "1", "2", "3", "bomb", etc.
     message: Optional[str] = None
     reasoning: Optional[str] = None
+    algorithm: Optional[str] = None # "MCTS", "LLM", "Greedy"
 
 @router.post("/suggest_move", response_model=MoveResponse)
 async def suggest_move(state: GameStateModel):
     """
     Endpoint to get the best move for a player.
-    Currently implements a simple rule-based fallback, 
-    but designed to be replaced/augmented by AI/LLM.
+    Uses AlphaGo-style MCTS by default, but also logs LLM suggestion for comparison.
     """
     try:
-        # Placeholder logic: just echo back the first card if any, or pass
-        # This is just to test connectivity.
-        # We will implement the actual logic in engine/ai_strategy.py
+        from engine.ai_strategy import llm_strategy, mcts_strategy
         
-        # Temporary logic:
-        # If I have cards, play the first one as a single. 
-        # If I have no cards, pass (shouldn't happen if game logic is right).
+        # 1. Run MCTS (Primary Strategy)
+        # This is the "AlphaGo" direction the user requested.
+        mcts_decision = mcts_strategy(state)
         
-        from engine.ai_strategy import llm_strategy
+        # 2. Run LLM (Secondary/Comparison)
+        # Kept as requested for comparison.
+        # We catch errors here so LLM failure doesn't block the game.
+        llm_decision = None
+        try:
+             llm_decision = llm_strategy(state)
+        except Exception as e:
+             print(f"LLM Strategy Failed: {e}")
         
-        decision = llm_strategy(state)
-        return decision
+        # Combine reasoning for display
+        final_decision = mcts_decision
+        final_decision['algorithm'] = "MCTS"
+        
+        comparison_text = ""
+        if llm_decision:
+            llm_desc = llm_decision.get('desc', llm_decision.get('action'))
+            comparison_text = f"\n\n[Comparison] LLM suggested: {llm_desc}\nLLM Reasoning: {llm_decision.get('reasoning', 'None')}"
+            
+        final_decision['reasoning'] = (final_decision.get('reasoning', '') or '') + comparison_text
+        
+        return final_decision
 
     except Exception as e:
         print(f"Error in suggest_move: {e}")
