@@ -60,7 +60,20 @@ GuandanTrainer/
 
 # Release Notes
 
-## v2.6 (Current)
+## v3.0 (Latest)
+- **Strategy Upgrade**: Replaced LLM with AlphaGo-style **MCTS (Monte Carlo Tree Search)** as the primary decision engine.
+  - Implements team-aware heuristics (no friendly fire, passing support).
+  - Uses rollout simulations to estimate win rates.
+- **New Dashboard**: Added a draggable "Training Stats & Decision Comparison" dashboard.
+  - **Live Comparison**: Shows MCTS decision vs LLM recommendation side-by-side.
+  - **Metrics**: Displays estimated Win Rate, Visit Counts, and Hand Strength Score.
+  - **Visualization**: Real-time charts for Win Rate and Hand Score trends.
+- **UI Improvements**: 
+  - Independent draggable windows for AI Reasoning and Dashboard.
+  - Enhanced text visibility and layout.
+- **Hand Strength Evaluation**: Added quantitative scoring for hand quality (bombs, card values).
+
+## v2.6
 - **AI Backend Migration**: Moved AI decision logic to Python backend (`GuandanAgent/engine`).
 - **LLM Integration**: Integrated ARK/DouBao LLM for strategic decision making via hybrid architecture.
 - **Visual AI Reasoning**: Added "AI推理和推荐" (AI Reasoning & Suggestion) modal to frontend.
