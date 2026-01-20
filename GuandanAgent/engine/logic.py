@@ -4,18 +4,22 @@ from engine.cards import Card, Rank, Suit
 
 # Power Ranks
 POWER_RANK = {
-    "king_bomb": 12,
+    "king_bomb": 14,
     "bomb_6_plus": 10,
-    "straight_flush": 8,
-    "bomb_5_less": 6,
+    "straight_flush": 9,
+    "bomb_5_less": 7,
     "steel_plate": 5,
     "wooden_board": 5,
     "straight": 4,
-    "full_house": 4,
+    "full_house": 5,
     "triple": 3,
     "pair": 2,
     "single": 1
 }
+
+# Heuristic Weights
+WEIGHT_POWER = 10
+WEIGHT_HAND_COUNT = 8
 
 def get_rank_value(rank_str: str) -> int:
     """Helper to get comparable value for rank."""
@@ -239,17 +243,10 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
     # And we will add specific Wild Bomb candidates to the DFS if needed (e.g. King Bomb or 6+ Bomb).
 
     # --- Layer 3: Optimized Partitioning of Remaining Natural Cards ---
-    # Heuristic Constants
-    # User's PowerRank: Single 1, Pair 2, Triple 3, Straight 4, Plate 5, Board 5, Bomb(<=5) 6, SF 8, Bomb(6+) 10, KingBomb 12
-    # We want Straight (4) > 5 Singles (5). 
-    # Formula: Score = Power * M - Groups * P
-    # 4M - P > 5M - 5P => 4P > M.
-    # If M=10, P > 2.5.
-    # We also want 2 Straights (8, 2 groups) > 5 Pairs (10, 5 groups).
-    # 8M - 2P > 10M - 5P => 3P > 2M => P > 6.6 (for M=10).
-    # So we choose M=10, P=7.
-    BASE_MULTIPLIER = 10
-    HAND_PENALTY = 15 # Tuned to prioritize minimizing hand count (User Request)
+    # Heuristic Constants (Global)
+    # Using WEIGHT_POWER and WEIGHT_HAND_COUNT defined at module level
+    BASE_MULTIPLIER = WEIGHT_POWER
+    HAND_PENALTY = WEIGHT_HAND_COUNT
 
     # Prepare data for DFS
     remaining_indices = [i for i in range(len(sorted_normal)) if i not in used_indices]
