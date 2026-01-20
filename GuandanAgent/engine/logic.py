@@ -233,46 +233,10 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
             continue
             
     # Pass 2: Use Wilds to form Bombs
-    # Re-evaluate
-    rank_groups = {}
-    for i, card in enumerate(sorted_normal):
-        if is_used(i): continue
-        r = get_rank_from_card(card)
-        if r not in rank_groups: rank_groups[r] = []
-        rank_groups[r].append(i)
-    
-    sorted_ranks = sorted(rank_groups.items(), key=lambda x: (len(x[1]), get_rank_value(x[0])), reverse=True)
-
-    for r, indices in sorted_ranks:
-        if any(is_used(idx) for idx in indices): continue
-        count = len(indices)
-        needed_for_4 = 4 - count
-        
-        if needed_for_4 <= num_wilds:
-            # OPTIMIZATION: Only be greedy if we form a High Power Bomb (6+ cards, Power 10)
-            # Otherwise, save Wilds for DFS to possibly form Straight Flushes, etc.
-            # Calculate total cards if we just meet requirement
-            total_cards = count + max(0, needed_for_4)
-            
-            # If we can make a 6+ bomb using available wilds
-            # We use as many wilds as needed to reach 6?
-            # Or just check if the "Min Necessary" results in 6+ (unlikely unless count >= 6)
-            # Or if we have enough wilds to boost it to 6.
-            
-            needed_for_6 = 6 - count
-            if needed_for_6 <= num_wilds:
-                # Form 6-card Bomb
-                use_wilds = needed_for_6
-                current_wilds = wild_cards[:use_wilds]
-                wild_cards = wild_cards[use_wilds:]
-                num_wilds -= use_wilds
-                
-                group_cards_list = [sorted_normal[i] for i in indices] + current_wilds
-                groups.append({"type": "bomb", "cards": group_cards_list, "power": POWER_RANK["bomb_6_plus"]})
-                used_indices.update(indices)
-            else:
-                # Skip Power 6 Bombs (4-5 cards) here. Let DFS handle/Rank Partition handle.
-                continue
+    # MOVED TO DFS CANDIDATES / BASE CASE
+    # We remove the greedy pass here to allow DFS to decide whether to use Wilds for Bombs or Straights.
+    # The base case `get_rank_partition_score` already handles optimal wild assignment for bombs/triples.
+    # And we will add specific Wild Bomb candidates to the DFS if needed (e.g. King Bomb or 6+ Bomb).
 
     # --- Layer 3: Optimized Partitioning of Remaining Natural Cards ---
     # Heuristic Constants
@@ -285,7 +249,7 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
     # 8M - 2P > 10M - 5P => 3P > 2M => P > 6.6 (for M=10).
     # So we choose M=10, P=7.
     BASE_MULTIPLIER = 10
-    HAND_PENALTY = 12
+    HAND_PENALTY = 15 # Tuned to prioritize minimizing hand count (User Request)
 
     # Prepare data for DFS
     remaining_indices = [i for i in range(len(sorted_normal)) if i not in used_indices]
@@ -310,28 +274,23 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
     # Straights
     # Need to group by unique rank for straights
     unique_singles_map = group_cards(remaining_cards)
-    unique_singles = [cards for cards in unique_singles_map.values()]
-    straights = find_consecutive_groups(unique_singles, 5, 1)
+    all_rank_groups = [cards for cards in unique_singles_map.values()]
+    
+    straights = find_consecutive_groups(all_rank_groups, 5, 1, wild_budget=len(wild_cards))
     for s in straights: 
         s['power'] = POWER_RANK['straight']
-        # Straights don't use wilds (for now)
-        s['wilds_needed'] = 0
         candidates.append(s)
         
     # Plates
-    triples = [cards for cards in unique_singles_map.values() if len(cards) >= 3]
-    plates = find_consecutive_groups(triples, 2, 3)
+    plates = find_consecutive_groups(all_rank_groups, 2, 3, wild_budget=len(wild_cards))
     for p in plates: 
         p['power'] = POWER_RANK['steel_plate']
-        p['wilds_needed'] = 0
         candidates.append(p)
         
     # Wooden Boards
-    pairs = [cards for cards in unique_singles_map.values() if len(cards) >= 2]
-    boards = find_consecutive_groups(pairs, 3, 2)
+    boards = find_consecutive_groups(all_rank_groups, 3, 2, wild_budget=len(wild_cards))
     for b in boards: 
         b['power'] = POWER_RANK['wooden_board']
-        b['wilds_needed'] = 0
         candidates.append(b)
 
     # Convert candidates cards to indices in `remaining_cards` for easy checking
@@ -621,33 +580,75 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
     
     return {"score": final_score, "groups": groups}
 
-def find_consecutive_groups(groups: List[List[Any]], count: int, width: int) -> List[Dict[str, Any]]:
-    """Helper to find consecutive groups like Straights, Plates, Boards."""
+def find_consecutive_groups(groups: List[List[Any]], count: int, width: int, wild_budget: int = 0) -> List[Dict[str, Any]]:
+    """
+    Helper to find consecutive groups like Straights, Plates, Boards.
+    Supports Wild Cards to fill gaps (width or length).
+    Generates multiple disjoint candidates (Depth) if possible.
+    """
     candidates = []
-    # Filter valid ranks and sort
-    valid_groups = [g for g in groups if get_rank_index(get_rank_from_card(g[0])) != -1]
-    valid_groups.sort(key=lambda g: get_rank_index(get_rank_from_card(g[0])))
     
-    if len(valid_groups) < count:
+    # 1. Map Rank Index -> List of Cards
+    rank_map = {}
+    valid_ranks = []
+    
+    for g in groups:
+        if not g: continue
+        r_idx = get_rank_index(get_rank_from_card(g[0]))
+        if r_idx != -1:
+            rank_map[r_idx] = g
+            valid_ranks.append(r_idx)
+            
+    if not rank_map:
         return []
         
-    for i in range(len(valid_groups) - count + 1):
-        subset = valid_groups[i : i + count]
-        is_consecutive = True
-        for j in range(count - 1):
-            curr = get_rank_index(get_rank_from_card(subset[j][0]))
-            next_r = get_rank_index(get_rank_from_card(subset[j+1][0]))
-            if next_r - curr != 1:
-                is_consecutive = False
-                break
+    # 2. Iterate all possible start ranks (2 to A)
+    # Max start is A - count + 1. (A=14)
+    min_r = 2
+    max_r = 14
+    
+    for start_r in range(min_r, max_r - count + 2):
+        # Check this window [start_r, start_r + count - 1]
         
-        if is_consecutive:
-            cards = []
-            for g in subset:
-                cards.extend(g[:width])
+        # Try to form candidates at increasing depth k=0, 1, ...
+        # We stop when we run out of wilds/cards for a depth.
+        
+        for k in range(100): # Safety limit, effectively infinite
+            cand_cards = []
+            cand_wilds_needed = 0
+            possible = True
             
-            start_rank = get_rank_label(subset[0][0])
-            end_rank = get_rank_label(subset[-1][0])
+            # Check each rank in sequence
+            for offset in range(count):
+                curr_r = start_r + offset
+                cards_at_rank = rank_map.get(curr_r, [])
+                
+                # We need 'width' cards for this rank.
+                # We want the k-th chunk: [k*width : (k+1)*width]
+                s_idx = k * width
+                e_idx = s_idx + width
+                
+                # Available naturals
+                available_count = len(cards_at_rank)
+                
+                if s_idx < available_count:
+                    # We have some naturals
+                    take_end = min(e_idx, available_count)
+                    cand_cards.extend(cards_at_rank[s_idx:take_end])
+                    
+                    taken_count = take_end - s_idx
+                    missing = width - taken_count
+                    cand_wilds_needed += missing
+                else:
+                    # No naturals left for this depth
+                    cand_wilds_needed += width
+            
+            if cand_wilds_needed > wild_budget:
+                break # Cannot form any more at this depth
+            
+            # Valid candidate
+            start_label = get_rank_label_from_index(start_r)
+            end_label = get_rank_label_from_index(start_r + count - 1)
             
             t_name = "straight"
             if width == 3: t_name = "steel_plate"
@@ -655,11 +656,42 @@ def find_consecutive_groups(groups: List[List[Any]], count: int, width: int) -> 
             
             candidates.append({
                 "action": "play",
-                "cards": cards,
-                "desc": f"Play {t_name.replace('_', ' ').title()} {start_rank}-{end_rank}",
+                "cards": cand_cards,
+                "wilds_needed": cand_wilds_needed,
+                "desc": f"Play {t_name.replace('_', ' ').title()} {start_label}-{end_label}",
                 "type": t_name
             })
+
+            # VARIATION LOGIC:
+            # If width == 1 (Straights), try to swap cards if alternatives exist.
+            # This helps avoid overlap with other groups (e.g. Straight Flush) that greedily pick specific cards.
+            if width == 1 and k == 0 and cand_wilds_needed <= wild_budget:
+                 # For each rank in sequence
+                 for offset in range(count):
+                     curr_r = start_r + offset
+                     cards_at_rank = rank_map.get(curr_r, [])
+                     # Check if we have an alternative card (index 1)
+                     if len(cards_at_rank) > 1:
+                         # Create a variant candidate using the second card at this rank
+                         # Note: cand_cards[offset] corresponds to rank `curr_r` because width=1 and loop is sequential
+                         if offset < len(cand_cards):
+                             variant_cards = list(cand_cards)
+                             variant_cards[offset] = cards_at_rank[1]
+                             
+                             candidates.append({
+                                "action": "play",
+                                "cards": variant_cards,
+                                "wilds_needed": cand_wilds_needed,
+                                "desc": f"Play {t_name.replace('_', ' ').title()} {start_label}-{end_label} (Var)",
+                                "type": t_name
+                             })
+            
     return candidates
+
+def get_rank_label_from_index(idx):
+    r_lookup = {2:'2', 3:'3', 4:'4', 5:'5', 6:'6', 7:'7', 8:'8', 9:'9', 10:'10', 11:'J', 12:'Q', 13:'K', 14:'A'}
+    return r_lookup.get(idx, str(idx))
+
 
 def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) -> List[Dict[str, Any]]:
     """
