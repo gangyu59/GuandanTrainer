@@ -148,7 +148,9 @@ def mcts_strategy(state: Any) -> Dict[str, Any]:
     env = GuandanEnv(my_hand, last_play)
     
     # Run MCTS
-    mcts = MCTS(time_limit_ms=2000) # 2 seconds thinking time
+    # Try to use Value Network if available
+    model_mgr = get_model_manager()
+    mcts = MCTS(time_limit_ms=2000, model=model_mgr) # 2 seconds thinking time
     
     try:
         best_action = mcts.search(env)

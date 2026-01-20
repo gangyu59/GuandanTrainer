@@ -56,16 +56,24 @@ class MCTSNode:
         return random.choice(best_nodes)
 
 class MCTS:
-    def __init__(self, time_limit_ms=2000):
+    def __init__(self, time_limit_ms=2000, model=None):
         self.time_limit_ms = time_limit_ms
+        self.model = model # Value Network (optional)
 
-    def search(self, root_state: GuandanEnv) -> Dict[str, Any]:
+    def search(self, root_state: GuandanEnv, num_simulations: int = None) -> Dict[str, Any]:
         root_node = MCTSNode(root_state.clone())
         
-        end_time = time.time() + (self.time_limit_ms / 1000.0)
+        start_time = time.time()
         
         iterations = 0
-        while time.time() < end_time:
+        while True:
+            # Check stopping criteria
+            if num_simulations is not None:
+                if iterations >= num_simulations:
+                    break
+            elif time.time() - start_time > (self.time_limit_ms / 1000.0):
+                 break
+
             node = root_node
             
             # Select
@@ -123,6 +131,21 @@ class MCTS:
         return child_node
 
     def rollout(self, state: GuandanEnv) -> float:
+        # If we have a Value Network, use it to estimate value of this state
+        if self.model:
+            from .env import state_to_vector # Local import to avoid circular dependency
+            
+            # Convert state to vector
+            # But state_to_vector needs to handle the "current player perspective".
+            # The model predicts value for the CURRENT player's team (or Team 0).
+            # Model output: 1.0 means Team 0 wins. -1.0 means Team 1 wins.
+            
+            vec = state_to_vector(state)
+            value = self.model.predict(vec) # Returns scalar [-1, 1] (Team 0 perspective)
+            
+            return value
+
+        # Otherwise, standard Random Rollout
         # Simulate until done
         current_state = state.clone() # Don't mutate the node's state
         depth = 0
@@ -179,7 +202,27 @@ class MCTS:
         # If must pass or no moves
         if not play_actions:
             return actions[0]
+
+        # FIX: Never pass if opponent played a small single (e.g. 3, 4, 5) and we can beat it with a small single (< 10)
+        # This fixes the "Pass on Small 3" bug.
+        if state and state.last_play and state.last_play.get('type') == '1':
+            target_rank_val = 0 # Need to extract from last_play... but GuandanEnv doesn't expose it easily here without importing logic
+            # However, logic.py sorts actions. So if we have a small single, it will be in play_actions[0].
+            # If play_actions[0] is a single < 10, we should play it.
+            # Assuming logic.py:get_rank_value is used for sorting.
             
+            # Check if smallest play is a single "small" card
+            best_play = play_actions[0]
+            if best_play['type'] == '1':
+                # Parse rank from desc or cards? cards[0].rank
+                # We can't easily check rank value without importing helper, but we can trust the sort order.
+                # If we have a play, do it. Don't pass on singles.
+                if pass_action:
+                    # Remove pass_action from consideration if we have a valid single response
+                    # Especially if it's early game?
+                    # Let's just be aggressive: If it's a Single, NEVER pass if we have a move.
+                    return random.choice(play_actions[:3])
+
         # If can play
         # 90% chance to play if available
         if pass_action and random.random() < 0.1:

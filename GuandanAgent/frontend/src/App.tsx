@@ -82,6 +82,7 @@ export function App() {
   const [lastAiDecision, setLastAiDecision] = useState<any>(null);
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardData, setDashboardData] = useState<any>(null);
+  const [trainingStats, setTrainingStats] = useState<any>(null);
 
   // Draggable Modal State
   const [aiModalPos, setAiModalPos] = useState({ x: window.innerWidth - 420, y: window.innerHeight - 500 });
@@ -189,10 +190,16 @@ export function App() {
 
   async function fetchDashboardData() {
     try {
-      const response = await fetch(`${API_BASE}/stats`);
-      if (response.ok) {
-        const data = await response.json();
-        setDashboardData(data);
+      const [statsRes, trainingRes] = await Promise.all([
+        fetch(`${API_BASE}/stats`),
+        fetch(`${API_BASE}/training/stats`)
+      ]);
+
+      if (statsRes.ok) {
+        setDashboardData(await statsRes.json());
+      }
+      if (trainingRes.ok) {
+        setTrainingStats(await trainingRes.json());
       }
     } catch (e) {
       console.error("Failed to fetch stats", e);
@@ -1043,76 +1050,80 @@ export function App() {
 
         <div id="player-icons">
           <div
-            className={
-              "player-icon " +
-              (currentPlayerIndex === 0 ? "active" : "dimmed")
-            }
-            id="player-0-icon"
+              className={
+                  "player-icon " +
+                  (currentPlayerIndex === 0 ? "active" : "dimmed")
+              }
+              id="player-0-icon"
           >
             {getRankBadge(0)}
-            <img src="/players/player_0.jpeg" alt="P0" />
+            {/*<img src="/players/player_0.jpg" alt="P0" />*/}
+            <img src="/cards/big_joker.jpeg" alt="P0"/>
             <div
-              className="p0-extras"
-              style={{
-                position: "absolute",
-                left: "100%",
-                top: "50%",
-                transform: "translateY(-50%)",
-                marginLeft: "12px",
-                display: "flex",
-                alignItems: "center",
-                background: "rgba(0, 0, 0, 0.6)",
-                padding: "4px 8px",
-                borderRadius: "4px",
-                color: "white",
-                fontSize: "12px",
-                whiteSpace: "nowrap",
-              }}
+                className="p0-extras"
+                style={{
+                  position: "absolute",
+                  left: "100%",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  marginLeft: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  background: "rgba(0, 0, 0, 0.6)",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  color: "white",
+                  fontSize: "12px",
+                  whiteSpace: "nowrap",
+                }}
             >
               <input
-                type="checkbox"
-                checked={isSplitMode}
-                onChange={(e) => setIsSplitMode(e.target.checked)}
-                style={{ marginRight: "4px", cursor: "pointer" }}
+                  type="checkbox"
+                  checked={isSplitMode}
+                  onChange={(e) => setIsSplitMode(e.target.checked)}
+                  style={{marginRight: "4px", cursor: "pointer"}}
               />
-              <span onClick={() => setIsSplitMode(!isSplitMode)} style={{ cursor: "pointer" }}>单选</span>
+              <span onClick={() => setIsSplitMode(!isSplitMode)} style={{cursor: "pointer"}}>单选</span>
             </div>
           </div>
           <div
-            className={
-              "player-icon " +
-              (currentPlayerIndex === 1 ? "active" : "dimmed")
-            }
-            id="player-1-icon"
+              className={
+                  "player-icon " +
+                  (currentPlayerIndex === 1 ? "active" : "dimmed")
+              }
+              id="player-1-icon"
           >
             {getRankBadge(1)}
-            <img src="/players/player_1.jpeg" alt="P1" />
+            {/*<img src="/players/player_1.jpeg" alt="P1" />*/}
+            <img src="/cards/small_joker.jpeg" alt="P1"/>
             <div className="player-card-count">
               {(hands[players[1]] ?? game?.hands?.[players[1]] ?? []).length}
             </div>
           </div>
           <div
-            className={
-              "player-icon " +
-              (currentPlayerIndex === 2 ? "active" : "dimmed")
-            }
-            id="player-2-icon"
+              className={
+                  "player-icon " +
+                  (currentPlayerIndex === 2 ? "active" : "dimmed")
+              }
+              id="player-2-icon"
           >
             {getRankBadge(2)}
-            <img src="/players/player_2.jpeg" alt="P2" />
+            {/*<img src="/players/player_2.jpeg" alt="P2" />*/}
+            <img src="/cards/big_joker.jpeg" alt="P2"/>
             <div className="player-card-count">
               {(hands[players[2]] ?? game?.hands?.[players[2]] ?? []).length}
             </div>
           </div>
           <div
-            className={
+              className={
               "player-icon " +
-              (currentPlayerIndex === 3 ? "active" : "dimmed")
-            }
-            id="player-3-icon"
+                  (currentPlayerIndex === 3 ? "active" : "dimmed")
+              }
+              id="player-3-icon"
           >
             {getRankBadge(3)}
-            <img src="/players/player_3.jpeg" alt="P3" />
+            {/*<img src="/players/player_3.jpeg" alt="P3" />*/}
+            <img src="/cards/small_joker.jpeg" alt="P3"/>
             <div className="player-card-count">
               {(hands[players[3]] ?? game?.hands?.[players[3]] ?? []).length}
             </div>
@@ -1120,7 +1131,7 @@ export function App() {
         </div>
 
         <div id="scoreboard">
-          <div className={`team self ${[0, 2].includes(currentStartPlayer) ? "highlight" : ""}`}>
+        <div className={`team self ${[0, 2].includes(currentStartPlayer) ? "highlight" : ""}`}>
             <div className="team-name">己方</div>
             <div className="team-score">{formatLevel(teamLevels.self)}</div>
           </div>
@@ -1287,6 +1298,90 @@ export function App() {
                     </div>
                   ) : (
                     <div style={{textAlign: "center", padding: "20px"}}>加载数据中...</div>
+                  )}
+                </div>
+
+                {/* RL Training Status Section */}
+                <div style={{marginTop: "30px"}}>
+                  <h4 style={{marginTop: 0, borderLeft: "4px solid #ff9800", paddingLeft: "10px", marginBottom: "15px"}}>
+                    强化学习进度 (RL Training Progress)
+                  </h4>
+                  {trainingStats ? (
+                    <div style={{ background: "#fff8e1", padding: "15px", borderRadius: "8px", border: "1px solid #ffecb3" }}>
+                       <div style={{display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "15px"}}>
+                          <div style={{textAlign: "center"}}>
+                             <div style={{color: "#666", fontSize: "12px"}}>Self-Play Games</div>
+                             <div style={{fontSize: "20px", fontWeight: "bold", color: "#f57c00"}}>{trainingStats.games_played}</div>
+                          </div>
+                          <div style={{textAlign: "center"}}>
+                             <div style={{color: "#666", fontSize: "12px"}}>Model Win Rate</div>
+                             <div style={{fontSize: "20px", fontWeight: "bold", color: "#f57c00"}}>{(trainingStats.current_win_rate * 100).toFixed(1)}%</div>
+                          </div>
+                          <div style={{textAlign: "center"}}>
+                             <div style={{color: "#666", fontSize: "12px"}}>Version</div>
+                             <div style={{fontSize: "14px", fontWeight: "bold", color: "#f57c00", marginTop: "4px"}}>{trainingStats.model_version}</div>
+                          </div>
+                       </div>
+                       
+                       {/* Mini Chart for Training Win Rate */}
+                       <div style={{fontSize: "12px", fontWeight: "bold", marginBottom: "5px", color: "#795548"}}>Recent Win/Loss (Last 100 Games)</div>
+                       <div style={{ height: "60px", display: "flex", alignItems: "flex-end", gap: "2px", background: "white", padding: "5px", borderRadius: "4px", overflowX: "hidden" }}>
+                    {trainingStats.history?.map((win: number, i: number) => (
+                      <div key={i} style={{
+                        width: "4px",
+                        height: "100%",
+                        backgroundColor: win === 1 ? "#4caf50" : "#f44336",
+                        opacity: 0.8,
+                        flexShrink: 0,
+                        borderRadius: "1px"
+                      }} title={win === 1 ? "Win" : "Loss"} />
+                    ))}
+               </div>
+               
+               {/* Win Rate Trend Chart */}
+               {trainingStats.trend && trainingStats.trend.length > 1 && (
+                  <div style={{marginTop: "15px"}}>
+                      <div style={{fontSize: "12px", fontWeight: "bold", marginBottom: "5px", color: "#1565c0"}}>Win Rate Trend (Moving Avg)</div>
+                      <div style={{height: "100px", background: "white", padding: "5px", borderRadius: "4px", position: "relative", border: "1px solid #e0e0e0"}}>
+                          <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+                              {/* Grid Lines */}
+                              <line x1="0" y1="0" x2="100" y2="0" stroke="#eee" strokeWidth="1" />
+                              <line x1="0" y1="25" x2="100" y2="25" stroke="#eee" strokeWidth="1" />
+                              <line x1="0" y1="50" x2="100" y2="50" stroke="#ddd" strokeWidth="1" strokeDasharray="2" />
+                              <line x1="0" y1="75" x2="100" y2="75" stroke="#eee" strokeWidth="1" />
+                              <line x1="0" y1="100" x2="100" y2="100" stroke="#eee" strokeWidth="1" />
+                              
+                              {/* Trend Line */}
+                              <polyline
+                                  fill="none"
+                                  stroke="#2196f3"
+                                  strokeWidth="2"
+                                  points={(() => {
+                                      const trend = trainingStats.trend;
+                                      const maxGame = trend[trend.length - 1].game;
+                                      // Start from the first game in trend
+                                      const minGame = trend[0].game;
+                                      const gameRange = maxGame - minGame || 1;
+                                      
+                                      return trend.map((t: any) => {
+                                          const x = ((t.game - minGame) / gameRange) * 100;
+                                          const y = 100 - (t.win_rate * 100);
+                                          return `${x},${y}`;
+                                      }).join(" ");
+                                  })()}
+                              />
+                          </svg>
+                          <div style={{position: "absolute", top: "2px", right: "5px", fontSize: "10px", color: "#999"}}>100%</div>
+                          <div style={{position: "absolute", top: "45%", right: "5px", fontSize: "10px", color: "#999"}}>50%</div>
+                          <div style={{position: "absolute", bottom: "2px", right: "5px", fontSize: "10px", color: "#999"}}>0%</div>
+                      </div>
+                  </div>
+               )}
+               
+                       <div style={{textAlign: "right", fontSize: "10px", color: "#999", marginTop: "5px"}}>Last 100 Games</div>
+                    </div>
+                  ) : (
+                    <div style={{color: "#999", fontStyle: "italic"}}>Training not started or stats unavailable</div>
                   )}
                 </div>
               </div>
@@ -1487,15 +1582,15 @@ export function App() {
           >
             {dealState === "loading" ? "发牌中..." : "开始发牌"}
           </button>
-          <button
-            id="organize-btn"
-            className="action-btn"
-            type="button"
-            onClick={handleOrganize}
-            disabled={!game || selfCards.length === 0}
-          >
-            理牌
-          </button>
+          {/*<button*/}
+          {/*  id="organize-btn"*/}
+          {/*  className="action-btn"*/}
+          {/*  type="button"*/}
+          {/*  onClick={handleOrganize}*/}
+          {/*  disabled={!game || selfCards.length === 0}*/}
+          {/*>*/}
+          {/*  理牌*/}
+          {/*</button>*/}
           <button
             id="min-hand-btn"
             className="action-btn"
@@ -1503,7 +1598,7 @@ export function App() {
             onClick={handleAiGroup}
             disabled={!game || selfCards.length === 0}
           >
-            AI组牌
+            AI 组牌
           </button>
           <button
             id="reset-btn"
@@ -1514,21 +1609,21 @@ export function App() {
           >
             还原
           </button>
-          <button
-            id="upload-btn"
-            className="action-btn"
-            type="button"
-            onClick={handleUpload}
-            disabled={!game || uploadState === "loading"}
-          >
-            {uploadState === "loading"
-              ? "记录中..."
-              : uploadState === "success"
-                ? "已记录"
-                : uploadState === "error"
-                  ? "重试记录"
-                  : "记录数据"}
-          </button>
+          {/*<button*/}
+          {/*  id="upload-btn"*/}
+          {/*  className="action-btn"*/}
+          {/*  type="button"*/}
+          {/*  onClick={handleUpload}*/}
+          {/*  disabled={!game || uploadState === "loading"}*/}
+          {/*>*/}
+          {/*  {uploadState === "loading"*/}
+          {/*    ? "记录中..."*/}
+          {/*    : uploadState === "success"*/}
+          {/*      ? "已记录"*/}
+          {/*      : uploadState === "error"*/}
+          {/*        ? "重试记录"*/}
+          {/*        : "记录数据"}*/}
+          {/*</button>*/}
         </div>
 
         <div id="action-panel">

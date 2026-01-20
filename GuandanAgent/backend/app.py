@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.routers.health import router as health_router
 from backend.routers.deal import router as deal_router
 from backend.routers.ai import router as ai_router
+from backend.routers.training import router as training_router
 
 
 def create_app() -> FastAPI:
@@ -17,6 +18,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api")
     app.include_router(deal_router, prefix="/api")
     app.include_router(ai_router, prefix="/api")
+    app.include_router(training_router, prefix="/api/training")
     return app
 
 

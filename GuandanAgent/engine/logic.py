@@ -21,13 +21,13 @@ def get_rank_index(rank_str: str) -> int:
 
 def sort_hand(cards: List[Any]) -> List[Any]:
     """Sort cards by value."""
-    return sorted(cards, key=lambda c: (get_rank_value(c.rank), c.suit))
+    return sorted(cards, key=lambda c: (get_rank_value(get_rank_from_card(c)), get_suit_from_card(c)))
 
 def group_cards(hand: List[Any]) -> Dict[str, List[Any]]:
     """Group cards by rank."""
     groups = {}
     for card in hand:
-        rank = card.rank
+        rank = get_rank_from_card(card)
         if rank not in groups:
             groups[rank] = []
         groups[rank].append(card)
@@ -45,21 +45,29 @@ def get_suit_from_card(card: Any) -> str:
         return card.get('suit')
     return card.suit
 
+def get_rank_label(card: Any) -> str:
+    """Helper to get string label for rank (e.g. '5' instead of 'Rank.R5')."""
+    r = get_rank_from_card(card)
+    if hasattr(r, 'value'):
+        return str(r.value)
+    return str(r)
+
 def find_straight_flushes(hand: List[Any]) -> List[Dict[str, Any]]:
     """Find Straight Flushes (5 consecutive cards of same suit)."""
     candidates = []
     # Group by suit
     suits = {}
     for card in hand:
-        if card.suit not in suits:
-            suits[card.suit] = []
-        suits[card.suit].append(card)
+        suit = get_suit_from_card(card)
+        if suit not in suits:
+            suits[suit] = []
+        suits[suit].append(card)
     
     for suit, cards in suits.items():
         # Sort by rank index
         # Filter valid ranks for straights
-        valid_cards = [c for c in cards if get_rank_index(c.rank) != -1]
-        valid_cards.sort(key=lambda c: get_rank_index(c.rank))
+        valid_cards = [c for c in cards if get_rank_index(get_rank_from_card(c)) != -1]
+        valid_cards.sort(key=lambda c: get_rank_index(get_rank_from_card(c)))
         
         if len(valid_cards) < 5:
             continue
@@ -68,15 +76,15 @@ def find_straight_flushes(hand: List[Any]) -> List[Dict[str, Any]]:
             subset = valid_cards[i:i+5]
             is_consecutive = True
             for j in range(4):
-                curr = get_rank_index(subset[j].rank)
-                next_r = get_rank_index(subset[j+1].rank)
+                curr = get_rank_index(get_rank_from_card(subset[j]))
+                next_r = get_rank_index(get_rank_from_card(subset[j+1]))
                 if next_r - curr != 1:
                     is_consecutive = False
                     break
             
             if is_consecutive:
-                start_rank = subset[0].rank
-                end_rank = subset[-1].rank
+                start_rank = get_rank_label(subset[0])
+                end_rank = get_rank_label(subset[-1])
                 candidates.append({
                     "action": "play",
                     "cards": subset,
@@ -112,8 +120,8 @@ def find_consecutive_groups(groups: List[List[Any]], count: int, width: int) -> 
     """Helper to find consecutive groups like Straights, Plates, Boards."""
     candidates = []
     # Filter valid ranks and sort
-    valid_groups = [g for g in groups if get_rank_index(g[0].rank) != -1]
-    valid_groups.sort(key=lambda g: get_rank_index(g[0].rank))
+    valid_groups = [g for g in groups if get_rank_index(get_rank_from_card(g[0])) != -1]
+    valid_groups.sort(key=lambda g: get_rank_index(get_rank_from_card(g[0])))
     
     if len(valid_groups) < count:
         return []
@@ -122,8 +130,8 @@ def find_consecutive_groups(groups: List[List[Any]], count: int, width: int) -> 
         subset = valid_groups[i : i + count]
         is_consecutive = True
         for j in range(count - 1):
-            curr = get_rank_index(subset[j][0].rank)
-            next_r = get_rank_index(subset[j+1][0].rank)
+            curr = get_rank_index(get_rank_from_card(subset[j][0]))
+            next_r = get_rank_index(get_rank_from_card(subset[j+1][0]))
             if next_r - curr != 1:
                 is_consecutive = False
                 break
@@ -133,8 +141,8 @@ def find_consecutive_groups(groups: List[List[Any]], count: int, width: int) -> 
             for g in subset:
                 cards.extend(g[:width])
             
-            start_rank = subset[0][0].rank
-            end_rank = subset[-1][0].rank
+            start_rank = get_rank_label(subset[0][0])
+            end_rank = get_rank_label(subset[-1][0])
             
             t_name = "straight"
             if width == 3: t_name = "steel_plate"
@@ -190,7 +198,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
         all_bombs.append({
             "action": "play",
             "cards": b,
-            "desc": f"Play Bomb {b[0].rank} ({len(b)} cards)",
+            "desc": f"Play Bomb {get_rank_label(b[0])} ({len(b)} cards)",
             "type": "bomb"
         })
     for sf in straight_flushes:
@@ -212,7 +220,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
                 moves.append({
                     "action": "play",
                     "cards": [card],
-                    "desc": f"Play Single {card.rank}",
+                    "desc": f"Play Single {get_rank_label(card)}",
                     "type": "1"
                 })
                 seen_ranks.add(card.rank)
@@ -225,7 +233,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
             moves.append({
                 "action": "play",
                 "cards": p[:2],
-                "desc": f"Play Pair {p[0].rank}",
+                "desc": f"Play Pair {get_rank_label(p[0])}",
                 "type": "2"
             })
             
@@ -235,7 +243,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
             moves.append({
                 "action": "play",
                 "cards": t[:3],
-                "desc": f"Play Triple {t[0].rank}",
+                "desc": f"Play Triple {get_rank_label(t[0])}",
                 "type": "3"
             })
             # Try to form a Full House (3+2) if possible
@@ -246,7 +254,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
                          moves.append({
                             "action": "play",
                             "cards": t[:3] + p[:2],
-                            "desc": f"Play Full House {t[0].rank} with {p[0].rank}",
+                            "desc": f"Play Full House {get_rank_label(t[0])} with {get_rank_label(p[0])}",
                             "type": "3+2"
                         })
                          break # Just one suggestion is enough
@@ -274,23 +282,59 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
         target_cards = last_play.get("cards", [])
         target_type = last_play.get("type", "unknown")
         
+        # Infer type if unknown or generic
         if not target_type or target_type == "unknown":
-            # Infer type from card count if missing (frontend should send it though)
-            if len(target_cards) == 1: target_type = "1"
-            elif len(target_cards) == 2: target_type = "2"
-            elif len(target_cards) == 3: target_type = "3"
+            t_grouped = group_cards(target_cards)
+            counts = sorted([len(v) for v in t_grouped.values()])
+            unique_ranks = sorted(t_grouped.keys(), key=lambda r: get_rank_value(r))
+            
+            # Check for Kings (Heavenly Bomb)
+            if len(target_cards) == 4 and all(c.rank in ['SJ', 'BJ'] for c in target_cards):
+                target_type = "bomb" # King Bomb
+            # Check for General Bomb (All same rank, count >= 4)
+            elif len(t_grouped) == 1 and len(target_cards) >= 4:
+                target_type = "bomb"
+            elif len(target_cards) == 1: 
+                target_type = "1"
+            elif len(target_cards) == 2: 
+                target_type = "2"
+            elif len(target_cards) == 3: 
+                target_type = "3"
             elif len(target_cards) == 5: 
-                # Could be Straight or 3+2 or Straight Flush
-                # Check for Straight Flush (Same Suit)
-                suits = set(get_suit_from_card(c) for c in target_cards)
-                if len(suits) == 1:
-                     target_type = "straight_flush"
+                if counts == [2, 3]:
+                    target_type = "3+2"
                 else:
-                     target_type = "straight"
-            elif len(target_cards) == 6: target_type = "steel_plate" 
-            elif len(target_cards) >= 4: target_type = "bomb" 
-        
+                    # Check Straight Flush vs Straight
+                    suits = set(get_suit_from_card(c) for c in target_cards)
+                    if len(suits) == 1:
+                        target_type = "straight_flush"
+                    else:
+                        target_type = "straight"
+            elif len(target_cards) == 6: 
+                if counts == [3, 3]:
+                    target_type = "steel_plate" 
+                elif counts == [2, 2, 2]:
+                    target_type = "wooden_board"
+                # Note: 6-card bomb handled by first check
+            
         target_val = get_rank_value(get_rank_from_card(target_cards[0])) if target_cards else 0
+        # For structured types, target_val usually implies the rank of the largest card in the sequence or the triplet
+        # Adjust target_val for special types
+        if target_type == "3+2":
+            # Find the triple's rank
+            t_grouped = group_cards(target_cards)
+            for r, cards in t_grouped.items():
+                if len(cards) == 3:
+                    target_val = get_rank_value(r)
+                    break
+        elif target_type in ["steel_plate", "wooden_board", "straight"]:
+             # Use the smallest rank to compare start-to-start, or largest to compare end-to-end?
+             # Standard is usually comparing the largest card in the sequence.
+             # But our generators (find_consecutive_groups) return 'cards' sorted.
+             # Let's use the first card's rank (start of sequence) for consistency with generators.
+             # But wait, target_cards might not be sorted.
+             sorted_target = sort_hand(target_cards)
+             target_val = get_rank_value(get_rank_from_card(sorted_target[0]))
         
         # If target is NOT a bomb, we can beat with same type OR any bomb
         if target_type not in ["bomb", "straight_flush"]:
@@ -304,7 +348,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
                             moves.append({
                                 "action": "play",
                                 "cards": [card],
-                                "desc": f"Play Single {card.rank}",
+                                "desc": f"Play Single {get_rank_label(card)}",
                                 "type": "1"
                             })
                             seen_ranks.add(card.rank)
@@ -318,7 +362,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
                         moves.append({
                             "action": "play",
                             "cards": p[:2],
-                            "desc": f"Play Pair {p[0].rank}",
+                            "desc": f"Play Pair {get_rank_label(p[0])}",
                             "type": "2"
                         })
                         if len(moves) > 3: break
@@ -330,10 +374,33 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
                         moves.append({
                             "action": "play",
                             "cards": t[:3],
-                            "desc": f"Play Triple {t[0].rank}",
+                            "desc": f"Play Triple {get_rank_label(t[0])}",
                             "type": "3"
                         })
                         if len(moves) > 2: break
+
+            elif target_type == "3+2":
+                triples.sort(key=lambda x: get_rank_value(x[0].rank))
+                for t in triples:
+                    if get_rank_value(t[0].rank) > target_val:
+                        # Need a pair (any pair, even small one)
+                        # Prefer smallest pair
+                        pairs.sort(key=lambda x: get_rank_value(x[0].rank))
+                        found_pair = None
+                        for p in pairs:
+                            if p[0].rank != t[0].rank:
+                                found_pair = p
+                                break
+                        
+                        if found_pair:
+                            moves.append({
+                                "action": "play",
+                                "cards": t[:3] + found_pair[:2],
+                                "desc": f"Play Full House {get_rank_label(t[0])} with {get_rank_label(found_pair[0])}",
+                                "type": "3+2"
+                            })
+                            # Only suggest one best 3+2 for this triple
+                            continue
 
             elif target_type == "straight":
                  for s in straights:
