@@ -2,6 +2,21 @@
 from typing import List, Dict, Any, Optional
 from engine.cards import Card, Rank, Suit
 
+# Power Ranks
+POWER_RANK = {
+    "king_bomb": 12,
+    "bomb_6_plus": 10,
+    "straight_flush": 8,
+    "bomb_5_less": 6,
+    "steel_plate": 5,
+    "wooden_board": 5,
+    "straight": 4,
+    "full_house": 4,
+    "triple": 3,
+    "pair": 2,
+    "single": 1
+}
+
 def get_rank_value(rank_str: str) -> int:
     """Helper to get comparable value for rank."""
     order = {
@@ -11,10 +26,10 @@ def get_rank_value(rank_str: str) -> int:
     return order.get(rank_str, 0)
 
 def get_rank_index(rank_str: str) -> int:
-    """Helper to get sequential index for checking consecutiveness (3-A)."""
-    # Exclude 2, SJ, BJ from straights usually
+    """Helper to get sequential index for checking consecutiveness (2-A)."""
+    # Map for consecutive checks. 2 is 2, ..., A is 14.
     order = {
-        "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10,
+        "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10,
         "J": 11, "Q": 12, "K": 13, "A": 14
     }
     return order.get(rank_str, -1)
@@ -36,8 +51,13 @@ def group_cards(hand: List[Any]) -> Dict[str, List[Any]]:
 def get_rank_from_card(card: Any) -> str:
     """Helper to handle both Card objects and dictionary representations."""
     if isinstance(card, dict):
-        return card.get('rank')
-    return card.rank
+        val = card.get('rank')
+    else:
+        val = card.rank
+    
+    if hasattr(val, 'value'):
+        return str(val.value)
+    return str(val)
 
 def get_suit_from_card(card: Any) -> str:
     """Helper to handle both Card objects and dictionary representations."""
@@ -52,8 +72,13 @@ def get_rank_label(card: Any) -> str:
         return str(r.value)
     return str(r)
 
-def find_straight_flushes(hand: List[Any]) -> List[Dict[str, Any]]:
-    """Find Straight Flushes (5 consecutive cards of same suit)."""
+def find_straight_flushes(hand: List[Any], all_combinations: bool = False, wild_budget: int = 0) -> List[Dict[str, Any]]:
+    """
+    Find Straight Flushes (5 consecutive cards of same suit).
+    Supports wild_budget to fill gaps.
+    If all_combinations=True, returns all overlapping candidates.
+    Otherwise returns greedy non-overlapping set.
+    """
     candidates = []
     # Group by suit
     suits = {}
@@ -69,52 +94,532 @@ def find_straight_flushes(hand: List[Any]) -> List[Dict[str, Any]]:
         valid_cards = [c for c in cards if get_rank_index(get_rank_from_card(c)) != -1]
         valid_cards.sort(key=lambda c: get_rank_index(get_rank_from_card(c)))
         
-        if len(valid_cards) < 5:
+        # DEBUG
+        # print(f"DEBUG: SF Check Suit {suit} Valid: {len(valid_cards)} {[get_rank_from_card(c) for c in valid_cards]}")
+
+        if not valid_cards:
             continue
             
-        for i in range(len(valid_cards) - 4):
-            subset = valid_cards[i:i+5]
-            is_consecutive = True
-            for j in range(4):
-                curr = get_rank_index(get_rank_from_card(subset[j]))
-                next_r = get_rank_index(get_rank_from_card(subset[j+1]))
-                if next_r - curr != 1:
-                    is_consecutive = False
-                    break
+        # Sliding window over ranks (2 to A)
+        # SF length is 5.
+        # Possible start ranks: 2 (2,3,4,5,6) to 10 (10,J,Q,K,A).
+        # We need to map cards to ranks.
+        rank_to_cards = {}
+        for c in valid_cards:
+            r_idx = get_rank_index(get_rank_from_card(c))
+            if r_idx not in rank_to_cards:
+                rank_to_cards[r_idx] = []
+            rank_to_cards[r_idx].append(c)
             
-            if is_consecutive:
-                start_rank = get_rank_label(subset[0])
-                end_rank = get_rank_label(subset[-1])
+        unique_ranks = sorted(rank_to_cards.keys())
+        min_rank = 2
+        max_rank = 14 # A
+        
+        for start_r in range(min_rank, max_rank - 4 + 1):
+            needed_wilds = 0
+            sf_cards = []
+            
+            valid_sf = True
+            for offset in range(5):
+                curr_r = start_r + offset
+                if curr_r in rank_to_cards:
+                    # Pick one card (greedy pick first, DFS handles overlap)
+                    sf_cards.append(rank_to_cards[curr_r][0])
+                else:
+                    needed_wilds += 1
+            
+            if needed_wilds <= wild_budget:
+                # Valid candidate!
+                # Note: We don't include actual Wild Card objects here, just the requirement.
+                # Caller needs to handle wild assignment.
+                
+                # Construct description
+                # Map rank index back to label
+                # This is a bit hacky, relying on order map inversion or just knowledge
+                # start_label = [k for k, v in get_rank_index.__globals__['get_rank_index'].__code__.co_consts if isinstance(v, dict)][0] # No wait
+                # Simple lookup
+                r_lookup = {2:'2', 3:'3', 4:'4', 5:'5', 6:'6', 7:'7', 8:'8', 9:'9', 10:'10', 11:'J', 12:'Q', 13:'K', 14:'A'}
+                s_label = r_lookup.get(start_r, str(start_r))
+                e_label = r_lookup.get(start_r+4, str(start_r+4))
+                
                 candidates.append({
                     "action": "play",
-                    "cards": subset,
-                    "desc": f"Play Straight Flush {start_rank}-{end_rank} ({suit})",
-                    "type": "straight_flush"
+                    "cards": sf_cards, # Only natural cards
+                    "wilds_needed": needed_wilds,
+                    "desc": f"Play Straight Flush {s_label}-{e_label} ({suit})",
+                    "type": "straight_flush",
+                    "power": POWER_RANK["straight_flush"]
                 })
-    return candidates
 
-def get_bomb_score(cards: List[Any], type_code: str) -> int:
+    if all_combinations:
+        return candidates
+
+    return candidates # Greedy filtering not implemented for wilds yet, returning all is safer for DFS
+
+def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str, Any]:
     """
-    Calculate score for comparing bombs.
-    4 Kings > 6+ Bomb > Straight Flush > 5 Bomb > 4 Bomb
-    Score = Base + RankValue
+    Partition hand into best possible combinations based on PowerRank.
+    Optimized to minimize leftover singles using Recursive Search with Pruning.
+    Returns: { "score": int, "groups": List[Dict] }
     """
-    # 4 Kings (Heavenly King Bomb)
-    if len(cards) == 4:
-        # Check ranks
-        ranks = [get_rank_from_card(c) for c in cards]
-        if all(r in ['SJ', 'BJ'] for r in ranks):
-            return 2000
+    if not hand:
+        return {"score": 0, "groups": []}
         
-    first_rank = get_rank_from_card(cards[0])
-    rank_val = get_rank_value(first_rank)
-    count = len(cards)
+    # 1. Identify Wild Cards
+    level_rank_map = {
+        2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10',
+        11: 'J', 12: 'Q', 13: 'K', 14: 'A'
+    }
+    level_rank_str = level_rank_map.get(current_level, '2')
     
-    if type_code == 'straight_flush':
-        # Equivalent to > 5 bomb but < 6 bomb
-        return 550 + rank_val
+    wild_cards = []
+    normal_cards = []
+    
+    for card in hand:
+        r = get_rank_from_card(card)
+        s = get_suit_from_card(card)
+        if r == level_rank_str and s == 'H':
+            wild_cards.append(card)
+        else:
+            normal_cards.append(card)
+            
+    num_wilds = len(wild_cards)
+    sorted_normal = sort_hand(normal_cards)
+    
+    groups = []
+    used_indices = set()
+    
+    # --- Layer 1: King Bomb (Always keep) ---
+    kings = [i for i, c in enumerate(sorted_normal) if get_rank_from_card(c) in ['SJ', 'BJ']]
+    if len(kings) == 4:
+        group_cards_list = [sorted_normal[i] for i in kings]
+        groups.append({
+            "type": "king_bomb", 
+            "cards": group_cards_list, 
+            "power": POWER_RANK["king_bomb"]
+        })
+        used_indices.update(kings)
+
+    # --- Layer 2: Wild Bombs (Priority) ---
+    # Prioritize forming 6+ bombs or 4+ bombs with Wilds
+    # Greedy approach for Wilds is usually optimal because they are high value.
+    # We remove cards used for wild bombs from the "Normal Partitioning" pool.
+    
+    # Helper to check if index is used
+    def is_used(idx): return idx in used_indices
+
+    rank_groups = {}
+    for i, card in enumerate(sorted_normal):
+        if is_used(i): continue
+        r = get_rank_from_card(card)
+        if r not in rank_groups: rank_groups[r] = []
+        rank_groups[r].append(i)
         
-    return count * 100 + rank_val
+    sorted_ranks = sorted(rank_groups.items(), key=lambda x: (len(x[1]), get_rank_value(x[0])), reverse=True)
+    
+    # Pass 1: Form 6+ Bombs (Power 10)
+    for r, indices in sorted_ranks:
+        count = len(indices)
+        if any(is_used(idx) for idx in indices): continue
+        
+        # Natural 6+
+        if count >= 6:
+            groups.append({
+                "type": "bomb", 
+                "cards": [sorted_normal[i] for i in indices], 
+                "power": POWER_RANK["bomb_6_plus"]
+            })
+            used_indices.update(indices)
+            continue
+            
+    # Pass 2: Use Wilds to form Bombs
+    # Re-evaluate
+    rank_groups = {}
+    for i, card in enumerate(sorted_normal):
+        if is_used(i): continue
+        r = get_rank_from_card(card)
+        if r not in rank_groups: rank_groups[r] = []
+        rank_groups[r].append(i)
+    
+    sorted_ranks = sorted(rank_groups.items(), key=lambda x: (len(x[1]), get_rank_value(x[0])), reverse=True)
+
+    for r, indices in sorted_ranks:
+        if any(is_used(idx) for idx in indices): continue
+        count = len(indices)
+        needed_for_4 = 4 - count
+        
+        if needed_for_4 <= num_wilds:
+            # OPTIMIZATION: Only be greedy if we form a High Power Bomb (6+ cards, Power 10)
+            # Otherwise, save Wilds for DFS to possibly form Straight Flushes, etc.
+            # Calculate total cards if we just meet requirement
+            total_cards = count + max(0, needed_for_4)
+            
+            # If we can make a 6+ bomb using available wilds
+            # We use as many wilds as needed to reach 6?
+            # Or just check if the "Min Necessary" results in 6+ (unlikely unless count >= 6)
+            # Or if we have enough wilds to boost it to 6.
+            
+            needed_for_6 = 6 - count
+            if needed_for_6 <= num_wilds:
+                # Form 6-card Bomb
+                use_wilds = needed_for_6
+                current_wilds = wild_cards[:use_wilds]
+                wild_cards = wild_cards[use_wilds:]
+                num_wilds -= use_wilds
+                
+                group_cards_list = [sorted_normal[i] for i in indices] + current_wilds
+                groups.append({"type": "bomb", "cards": group_cards_list, "power": POWER_RANK["bomb_6_plus"]})
+                used_indices.update(indices)
+            else:
+                # Skip Power 6 Bombs (4-5 cards) here. Let DFS handle/Rank Partition handle.
+                continue
+
+    # --- Layer 3: Optimized Partitioning of Remaining Natural Cards ---
+    # Heuristic Constants
+    # User's PowerRank: Single 1, Pair 2, Triple 3, Straight 4, Plate 5, Board 5, Bomb(<=5) 6, SF 8, Bomb(6+) 10, KingBomb 12
+    # We want Straight (4) > 5 Singles (5). 
+    # Formula: Score = Power * M - Groups * P
+    # 4M - P > 5M - 5P => 4P > M.
+    # If M=10, P > 2.5.
+    # We also want 2 Straights (8, 2 groups) > 5 Pairs (10, 5 groups).
+    # 8M - 2P > 10M - 5P => 3P > 2M => P > 6.6 (for M=10).
+    # So we choose M=10, P=7.
+    BASE_MULTIPLIER = 10
+    HAND_PENALTY = 12
+
+    # Prepare data for DFS
+    remaining_indices = [i for i in range(len(sorted_normal)) if i not in used_indices]
+    remaining_cards = [sorted_normal[i] for i in remaining_indices]
+    
+    if not remaining_cards:
+        # Just add remaining wilds if any
+        for w in wild_cards:
+            groups.append({"type": "single", "cards": [w], "power": POWER_RANK["single"]})
+        
+        total_score = sum(g['power'] for g in groups)
+        return {"score": total_score, "groups": groups}
+
+    # Generate Candidates for Sequences
+    candidates = []
+    
+    # Straight Flushes
+    # Try with all available wilds.
+    sfs = find_straight_flushes(remaining_cards, all_combinations=True, wild_budget=len(wild_cards))
+    candidates.extend(sfs)
+    
+    # Straights
+    # Need to group by unique rank for straights
+    unique_singles_map = group_cards(remaining_cards)
+    unique_singles = [cards for cards in unique_singles_map.values()]
+    straights = find_consecutive_groups(unique_singles, 5, 1)
+    for s in straights: 
+        s['power'] = POWER_RANK['straight']
+        # Straights don't use wilds (for now)
+        s['wilds_needed'] = 0
+        candidates.append(s)
+        
+    # Plates
+    triples = [cards for cards in unique_singles_map.values() if len(cards) >= 3]
+    plates = find_consecutive_groups(triples, 2, 3)
+    for p in plates: 
+        p['power'] = POWER_RANK['steel_plate']
+        p['wilds_needed'] = 0
+        candidates.append(p)
+        
+    # Wooden Boards
+    pairs = [cards for cards in unique_singles_map.values() if len(cards) >= 2]
+    boards = find_consecutive_groups(pairs, 3, 2)
+    for b in boards: 
+        b['power'] = POWER_RANK['wooden_board']
+        b['wilds_needed'] = 0
+        candidates.append(b)
+
+    # Convert candidates cards to indices in `remaining_cards` for easy checking
+    # This is tricky because `remaining_cards` has duplicates.
+    # We map card objects to their index in `remaining_cards`.
+    # Assuming card objects are unique in memory or we use index.
+    # Since `find_xxx` returns card objects, we can map back.
+    card_to_idx = {id(c): i for i, c in enumerate(remaining_cards)}
+    
+    candidate_indices = []
+    for cand in candidates:
+        indices = []
+        valid = True
+        for c in cand['cards']:
+            if id(c) in card_to_idx:
+                indices.append(card_to_idx[id(c)])
+            else:
+                valid = False
+                break
+        if valid:
+            # Check for duplicates in indices (e.g. if find logic reused same card? unlikely)
+            candidate_indices.append({
+                "indices": set(indices),
+                "data": cand,
+                "wilds_needed": cand.get('wilds_needed', 0),
+                "score": cand['power'] * BASE_MULTIPLIER - HAND_PENALTY 
+            })
+
+    # Filter candidates that are subsets of better candidates? 
+    # Or just let DFS handle it.
+    # Sort candidates by Score desc to try best first
+    candidate_indices.sort(key=lambda x: x['score'], reverse=True)
+    
+    # DEBUG
+    # print(f"DEBUG: Candidates Found: {len(candidate_indices)}")
+    # for c in candidate_indices:
+    #     print(f"DEBUG: Candidate {c['data']['type']} Score {c['score']} WildsNeeded {c['wilds_needed']} Cards: {[get_rank_label(x) for x in c['data']['cards']]}")
+
+    # DFS Cache
+    memo = {}
+    
+    # Constants moved to top
+
+    def get_rank_partition_score(current_mask, current_wild_count):
+        """Calculate score if we just group remaining by Rank (Bombs/Triples/Pairs/Singles)."""
+        # Reconstruct remaining
+        current_rem = []
+        for i in range(len(remaining_cards)):
+            if not ((current_mask >> i) & 1):
+                current_rem.append(remaining_cards[i])
+        
+        # We also have 'wild_cards' (list) available to use!
+        # Since DFS might have consumed some wilds, we only use `current_wild_count`.
+        current_wilds = wild_cards[:current_wild_count]
+        
+        if not current_rem and not current_wilds: return 0, []
+        
+        g_map = group_cards(current_rem)
+        score = 0
+        p_groups = []
+        
+        # 1. Identify patterns from Naturals
+        # We'll store them as objects to allow modifying (adding wilds)
+        groups_data = []
+        
+        for r, cards in g_map.items():
+            groups_data.append({"rank": r, "cards": cards, "base_count": len(cards)})
+            
+        # Sort groups by count desc (Greedy: easier to upgrade larger groups)
+        groups_data.sort(key=lambda x: (len(x['cards']), get_rank_value(x['rank'])), reverse=True)
+        
+        # 2. Distribute Wilds to Maximize Score
+        # Strategy: 
+        # A. Try to form 6+ Bombs (Power 10)
+        # B. Try to form 4+ Bombs (Power 6)
+        # C. Form Triples/Pairs/Singles
+        
+        # A. Form 6+ Bombs
+        for g in groups_data:
+            if not current_wilds: break
+            count = len(g['cards'])
+            needed = 6 - count
+            if needed > 0 and needed <= len(current_wilds):
+                # Check if it's worth it? (Power 10 vs using wilds elsewhere)
+                # Generally yes, Power 10 is max.
+                use = current_wilds[:needed]
+                g['cards'].extend(use)
+                current_wilds = current_wilds[needed:]
+        
+        # B. Form 4+ Bombs (if not already 6+)
+        for g in groups_data:
+            if not current_wilds: break
+            count = len(g['cards'])
+            if count >= 6: continue # Already handled
+            
+            needed = 4 - count
+            if needed > 0 and needed <= len(current_wilds):
+                use = current_wilds[:needed]
+                g['cards'].extend(use)
+                current_wilds = current_wilds[needed:]
+                
+        # C. Leftover Wilds
+        # Can we upgrade any Bomb to 6? (e.g. 4 -> 6)
+        for g in groups_data:
+            if not current_wilds: break
+            count = len(g['cards'])
+            if count >= 4 and count < 6:
+                needed = 6 - count
+                if needed <= len(current_wilds):
+                    use = current_wilds[:needed]
+                    g['cards'].extend(use)
+                    current_wilds = current_wilds[needed:]
+
+        # D. Any remaining wilds -> Merge into existing groups to reduce singles
+        # Try to make Wild Bombs first (Power 6) from pure wilds if we have 4+
+        while len(current_wilds) >= 4:
+             # Add to groups_data as a new bomb group
+             # We need a rank. Use rank of first wild.
+             w_rank = get_rank_from_card(current_wilds[0])
+             new_group = {"rank": w_rank, "cards": current_wilds[:4], "base_count": 0}
+             groups_data.append(new_group)
+             current_wilds = current_wilds[4:]
+             
+        # Merge remaining (<4) into existing groups
+        # Since we already tried to form Bombs in Step A/B, these merges won't reach Bomb status usually.
+        # But they convert Pair->Triple, Single->Pair.
+        for w in current_wilds:
+            target = None
+            # Prioritize groups < 4 to improve their structure
+            for g in groups_data:
+                if len(g['cards']) < 4:
+                    target = g
+                    break
+            
+            # If no small group found, add to any group (e.g. make a bigger bomb)
+            if not target and groups_data:
+                target = groups_data[0]
+                
+            if target:
+                target['cards'].append(w)
+            else:
+                # No groups exist (was empty hand). Create new single.
+                new_group = {"rank": get_rank_from_card(w), "cards": [w], "base_count": 1}
+                groups_data.append(new_group)
+
+        # 3. Calculate Final Score for Groups
+        # Separate into lists for processing (Full House logic needs specific lists)
+        bombs_list = []
+        triples_list = []
+        pairs_list = []
+        singles_list = []
+        
+        for g in groups_data:
+            c = len(g['cards'])
+            if c >= 4:
+                bombs_list.append(g)
+            elif c == 3:
+                triples_list.append(g)
+            elif c == 2:
+                pairs_list.append(g)
+            elif c == 1:
+                singles_list.append(g)
+                
+        # Form Full Houses (Triple + Pair)
+        while triples_list and pairs_list:
+            t = triples_list.pop(0)
+            p = pairs_list.pop(0)
+            
+            combined = t['cards'] + p['cards']
+            p_val = POWER_RANK["full_house"]
+            score += p_val * BASE_MULTIPLIER - HAND_PENALTY
+            p_groups.append({
+                "type": "full_house", 
+                "cards": combined, 
+                "power": p_val,
+                "desc": f"Full House {get_rank_label(t['cards'][0])}"
+            })
+            
+        # Score others
+        for g in bombs_list:
+            c = len(g['cards'])
+            p_val = POWER_RANK["bomb_5_less"]
+            if c >= 6: p_val = POWER_RANK["bomb_6_plus"]
+            score += p_val * BASE_MULTIPLIER - HAND_PENALTY
+            p_groups.append({"type": "bomb", "cards": g['cards'], "power": p_val})
+            
+        for g in triples_list:
+            score += POWER_RANK["triple"] * BASE_MULTIPLIER - HAND_PENALTY
+            p_groups.append({"type": "triple", "cards": g['cards'], "power": POWER_RANK["triple"]})
+            
+        for g in pairs_list:
+            score += POWER_RANK["pair"] * BASE_MULTIPLIER - HAND_PENALTY
+            p_groups.append({"type": "pair", "cards": g['cards'], "power": POWER_RANK["pair"]})
+            
+        for g in singles_list:
+            score += POWER_RANK["single"] * BASE_MULTIPLIER - HAND_PENALTY
+            p_groups.append({"type": "single", "cards": g['cards'], "power": POWER_RANK["single"]})
+            
+        # Add Wild Singles Score (already added to p_groups above)
+        # Note: We didn't add their score to `score` variable loop above
+        for g in p_groups:
+             # Check if it was a wild single added directly
+             if g['cards'][0] in wild_cards and g not in [x for x in groups_data]: 
+                 # Wait, logic mixing. 
+                 # We added wild groups to p_groups but didn't add to `score`.
+                 pass
+        
+        # Recalculate score from p_groups to be safe
+        score = 0
+        for g in p_groups:
+             score += g['power'] * BASE_MULTIPLIER - HAND_PENALTY
+             
+        return score, p_groups
+
+    def dfs(mask, current_wild_count):
+        state = (mask, current_wild_count)
+        if state in memo: return memo[state]
+        
+        # Base case: Calculate score from Rank Partitioning
+        best_score, best_grps = get_rank_partition_score(mask, current_wild_count)
+        
+        # Try picking a candidate
+        for cand in candidate_indices:
+            # Check overlap
+            c_indices = cand['indices']
+            wilds_needed = cand['wilds_needed']
+            
+            # Check wild budget
+            if wilds_needed > current_wild_count:
+                continue
+                
+            # Convert indices to mask check
+            # Mask bit 1 = Used.
+            overlap = False
+            for idx in c_indices:
+                if (mask >> idx) & 1:
+                    overlap = True
+                    break
+            
+            if not overlap:
+                # Apply candidate
+                new_mask = mask
+                for idx in c_indices:
+                    new_mask |= (1 << idx)
+                
+                # Consume wilds
+                rem_score, rem_grps = dfs(new_mask, current_wild_count - wilds_needed)
+                
+                current_total = cand['score'] + rem_score
+                
+                if current_total > best_score:
+                    best_score = current_total
+                    # Add used wilds to this candidate group if needed
+                    final_cand_group = cand['data'].copy()
+                    if wilds_needed > 0:
+                        # Take specific wild cards from the pool
+                        # We are using the 'last' wilds available (conceptually)
+                        # current_wild_count available. We use `wilds_needed`.
+                        # Let's say we have 2 wilds: W1, W2.
+                        # We use 1. We pass 1 to recursion.
+                        # Which one did we use? wild_cards[current_wild_count - 1] ?
+                        # Or wild_cards[0] ?
+                        # get_rank_partition_score uses wild_cards[:count].
+                        # So it uses the FIRST `count`.
+                        # So we should use the LAST `wilds_needed`?
+                        # Or we just take from the pool.
+                        # Let's say we use `wild_cards[current_wild_count - wilds_needed : current_wild_count]`
+                        used_w = wild_cards[current_wild_count - wilds_needed : current_wild_count]
+                        final_cand_group['cards'] = final_cand_group['cards'] + used_w
+                        
+                    best_grps = [final_cand_group] + rem_grps
+        
+        memo[state] = (best_score, best_grps)
+        return best_score, best_grps
+
+    # Run DFS
+    # Initial mask 0 (all available), full wild count
+    _, best_partition_groups = dfs(0, len(wild_cards))
+    
+    groups.extend(best_partition_groups)
+    
+    # Note: remaining wilds are already handled in get_rank_partition_score
+    # and included in best_partition_groups.
+
+    # Recalculate total power score for user (not heuristic score)
+    final_score = sum(g['power'] for g in groups)
+    
+    return {"score": final_score, "groups": groups}
 
 def find_consecutive_groups(groups: List[List[Any]], count: int, width: int) -> List[Dict[str, Any]]:
     """Helper to find consecutive groups like Straights, Plates, Boards."""
@@ -156,14 +661,43 @@ def find_consecutive_groups(groups: List[List[Any]], count: int, width: int) -> 
             })
     return candidates
 
-def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
+def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) -> List[Dict[str, Any]]:
     """
     Generate legal moves based on current hand and last play.
     Supports: Single, Pair, Triple, Full House, Straight, Plate, Wooden Board, Bomb, Straight Flush
+    Includes Wild Card (Level Card Heart) support for Bombs.
     """
     moves = []
-    sorted_hand = sort_hand(my_hand)
-    grouped_hand = group_cards(sorted_hand)
+    
+    # Identify Wild Cards (Red Hearts of Current Level)
+    # Convert level to rank string (2->'2', ..., 10->'10', 11->'J', 12->'Q', 13->'K', 14->'A')
+    level_rank_map = {
+        2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10',
+        11: 'J', 12: 'Q', 13: 'K', 14: 'A'
+    }
+    level_rank_str = level_rank_map.get(current_level, '2')
+    
+    # Separate Wild Cards and Normal Cards
+    wild_cards = []
+    normal_cards = []
+    
+    for card in my_hand:
+        r = get_rank_from_card(card)
+        s = get_suit_from_card(card)
+        # Check if it is a wild card (Rank matches level AND Suit is Hearts)
+        if r == level_rank_str and s == 'H':
+            wild_cards.append(card)
+        else:
+            normal_cards.append(card)
+            
+    num_wilds = len(wild_cards)
+    
+    sorted_hand = sort_hand(my_hand) # Kept for general logic
+    # Use normal_cards for grouping to avoid polluting groups with wild cards when looking for base patterns
+    sorted_normal = sort_hand(normal_cards)
+    grouped_normal = group_cards(sorted_normal)
+    
+    grouped_hand = group_cards(sorted_hand) # Original grouping (includes wilds as their face value)
     
     # Pre-calculate groups
     singles = sorted_hand
@@ -173,7 +707,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
     
     pairs = [cards for cards in grouped_hand.values() if len(cards) >= 2]
     triples = [cards for cards in grouped_hand.values() if len(cards) >= 3]
-    bombs = [cards for cards in grouped_hand.values() if len(cards) >= 4] # Basic bombs
+    bombs = [cards for cards in grouped_hand.values() if len(cards) >= 4] # Basic bombs (natural)
     
     # Generate Advanced Types
     straights = find_consecutive_groups(unique_singles, 5, 1)
@@ -182,7 +716,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
     straight_flushes = find_straight_flushes(singles)
     
     # Check for 4 Kings
-    kings = [c for c in singles if c.rank in ['SJ', 'BJ']]
+    kings = [c for c in singles if get_rank_from_card(c) in ['SJ', 'BJ']]
     king_bomb = None
     if len(kings) == 4:
         king_bomb = {
@@ -201,6 +735,36 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
             "desc": f"Play Bomb {get_rank_label(b[0])} ({len(b)} cards)",
             "type": "bomb"
         })
+        
+    # --- WILD CARD BOMB GENERATION ---
+    if num_wilds > 0:
+        # Try to form bombs with every normal rank
+        for rank, cards in grouped_normal.items():
+            count = len(cards)
+            # If we can make a bomb (at least 4 cards total)
+            if count + num_wilds >= 4:
+                # 1. Max Power Bomb (All wilds)
+                combined = cards + wild_cards
+                all_bombs.append({
+                    "action": "play",
+                    "cards": combined,
+                    "desc": f"Play Wild Bomb {get_rank_label(cards[0])} ({len(combined)} cards)",
+                    "type": "bomb"
+                })
+                
+                # 2. Min Necessary Bomb (Just enough to make 4, or 5 if we want diversity)
+                # Only if different from max power
+                needed = 4 - count
+                if needed > 0 and needed < num_wilds:
+                    subset_wilds = wild_cards[:needed]
+                    combined_min = cards + subset_wilds
+                    all_bombs.append({
+                        "action": "play",
+                        "cards": combined_min,
+                        "desc": f"Play Wild Bomb {get_rank_label(cards[0])} ({len(combined_min)} cards)",
+                        "type": "bomb"
+                    })
+    
     for sf in straight_flushes:
         all_bombs.append(sf)
     if king_bomb:
@@ -444,63 +1008,34 @@ def get_legal_moves(my_hand: List[Any], last_play: Any) -> List[Dict[str, Any]]:
 
     return moves
 
-def calculate_hand_strength(hand: List[Any]) -> Dict[str, Any]:
+def calculate_hand_strength(hand: List[Any], current_level: int = 2) -> Dict[str, Any]:
     """
-    Evaluate hand strength for heuristics and UI display.
-    Returns a dict with score and details.
+    Calculate Hand Strength using PowerRank-based Partitioning.
+    Returns:
+      - score: Total PowerRank Score
+      - groups: List of groups
+      - num_bombs: Count of bombs
+      - desc: Description string
     """
-    sorted_hand = sort_hand(hand)
-    grouped = group_cards(sorted_hand)
-    
-    score = 0
-    details = []
-    
-    # 1. Base Card Values
-    # 3-10: Low
-    # J-A: Medium
-    # 2: High (Level Card, assume 2 for now as we don't track level yet)
-    # SJ/BJ: Top
-    
-    total_card_value = 0
-    for card in sorted_hand:
-        val = get_rank_value(card.rank)
-        if val >= 20: # Jokers
-            score += 4
-            total_card_value += 10
-        elif val == 2: # Level Card (Approx)
-            score += 3
-            total_card_value += 8
-        elif val >= 14: # A
-            score += 2
-            total_card_value += 6
-        elif val >= 11: # J, Q, K
-            score += 1
-            total_card_value += 4
-        else:
-            total_card_value += 1
-            
-    # 2. Structure Values (Bombs)
-    bombs = [cards for cards in grouped.values() if len(cards) >= 4]
-    kings = [c for c in sorted_hand if c.rank in ['SJ', 'BJ']]
-    if len(kings) == 4:
-        bombs.append(kings)
+    if not hand:
+        return {"score": 0, "groups": [], "num_bombs": 0, "desc": "Empty Hand"}
         
-    straight_flushes = find_straight_flushes(sorted_hand)
+    result = optimize_hand_partition(hand, current_level=current_level)
     
-    num_bombs = len(bombs) + len(straight_flushes)
-    score += num_bombs * 10
+    score = result['score']
+    groups = result['groups']
     
-    # 3. Penalties
-    # Many single small cards are bad
-    singles = [k for k, v in grouped.items() if len(v) == 1 and get_rank_value(k) < 10]
-    score -= len(singles) * 1
+    # Calculate Metadata
+    num_bombs = sum(1 for g in groups if g['type'] in ['bomb', 'king_bomb', 'straight_flush'])
     
-    # 4. Hand Count (Fewer is better usually, but context matters)
-    # Here we just evaluate "Material Strength"
+    # Scale score to look nicer (0-100 range approximation)
+    # 10 is max power for a group. 27 cards -> maybe 5-6 groups.
+    # Typical score 30-60.
+    # No need to scale heavily.
     
     return {
         "score": score,
+        "groups": groups,
         "num_bombs": num_bombs,
-        "total_card_value": total_card_value,
-        "desc": f"Score: {score} (Bombs: {num_bombs})"
+        "desc": f"Power Score: {score} (Bombs: {num_bombs})"
     }

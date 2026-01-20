@@ -15,7 +15,8 @@ class GameStateModel(BaseModel):
     current_hand: List[List[CardModel]] # Grouped hand (optional)
     last_play: Optional[Dict[str, Any]] = None # Who played what last
     played_cards: Optional[Dict[int, List[CardModel]]] = None # History of played cards
-    
+    current_level: int = 2 # Current game level (Rank of Wild Card)
+
 class MoveResponse(BaseModel):
     action: str # "play" or "pass"
     cards: List[CardModel]

@@ -391,6 +391,10 @@ export function App() {
     // Call Backend AI
     let decision: { type: string; cards: Card[] } | { type: "pass" } = { type: "pass" };
     
+    // Determine Current Level
+    const isSelfTeam = [0, 2].includes(currentStartPlayer);
+    const currentLevel = isSelfTeam ? teamLevels.self : teamLevels.opponent;
+
     try {
         const payload = {
             player_index: playerIndex,
@@ -401,7 +405,7 @@ export function App() {
                 cards: last.cards,
                 type: last.type
             } : null,
-            // We can also send played history, etc.
+            current_level: currentLevel
         };
 
         const response = await fetch(`${API_BASE}/suggest_move`, {

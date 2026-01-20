@@ -26,7 +26,9 @@ def self_play_game(model_manager) -> Tuple[int, List[Tuple[List[float], float]]]
     # 2. Initialize God View Environment
     # Random start player
     start_player = random.randint(0, 3)
-    env = GuandanEnv(my_hand=[], all_hands=hands, current_player=start_player)
+    # Random Level (2-14) to train with different wild cards
+    current_level = random.randint(2, 14)
+    env = GuandanEnv(my_hand=[], all_hands=hands, current_player=start_player, current_level=current_level)
     
     # 3. Game Loop
     mcts = MCTS(model=model_manager) # Pass model wrapper
@@ -57,7 +59,8 @@ def self_play_game(model_manager) -> Tuple[int, List[Tuple[List[float], float]]]
                 my_hand=env.hands[current_p],
                 last_play=env.last_play,
                 current_player=current_p,
-                pass_count=env.pass_count
+                pass_count=env.pass_count,
+                current_level=current_level
             )
             # Use small num_simulations for speed
             mcts_action_info = mcts.search(player_view_env, num_simulations=30)

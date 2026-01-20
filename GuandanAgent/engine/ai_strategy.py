@@ -96,12 +96,13 @@ def llm_strategy(state: Any) -> Dict[str, Any]:
     """
     my_hand = state.my_hand
     last_play = state.last_play
+    current_level = getattr(state, 'current_level', 2)
     
     if not my_hand:
         return {"action": "pass", "cards": [], "message": "No cards left", "reasoning": "No cards"}
         
     # 1. Generate Legal Moves
-    moves = get_legal_moves(my_hand, last_play)
+    moves = get_legal_moves(my_hand, last_play, current_level=current_level)
     
     if not moves:
         return {"action": "pass", "cards": [], "message": "No legal moves (Backend)", "reasoning": "No legal moves found by rule engine"}
@@ -139,13 +140,14 @@ def mcts_strategy(state: Any) -> Dict[str, Any]:
     """
     my_hand = state.my_hand
     last_play = state.last_play
+    current_level = getattr(state, 'current_level', 2)
     
     if not my_hand:
         return {"action": "pass", "cards": [], "message": "No cards left", "reasoning": "No cards"}
 
     # Initialize Environment
     # GuandanEnv expects my_hand (List[Card]) and last_play (Dict)
-    env = GuandanEnv(my_hand, last_play)
+    env = GuandanEnv(my_hand, last_play, current_level=current_level)
     
     # Run MCTS
     # Try to use Value Network if available
@@ -160,10 +162,10 @@ def mcts_strategy(state: Any) -> Dict[str, Any]:
     
     if not best_action:
         # Fallback to legal moves
-        moves = get_legal_moves(my_hand, last_play)
+        moves = get_legal_moves(my_hand, last_play, current_level=current_level)
         if moves:
             best_action = moves[0]
-            hand_eval = calculate_hand_strength(my_hand)
+            hand_eval = calculate_hand_strength(my_hand, current_level=current_level)
             return {
                 **best_action,
                 "message": f"Fallback: First Legal Move (Hand Score: {hand_eval['score']})",
@@ -172,7 +174,7 @@ def mcts_strategy(state: Any) -> Dict[str, Any]:
         return {"action": "pass", "cards": [], "message": "No legal moves (MCTS Fallback)"}
         
     # Add Hand Strength Info
-    hand_eval = calculate_hand_strength(my_hand)
+    hand_eval = calculate_hand_strength(my_hand, current_level=current_level)
     win_rate_pct = best_action.get('win_rate', 0.5) * 100
     visits = best_action.get('visits', 0)
     

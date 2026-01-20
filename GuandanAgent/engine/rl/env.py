@@ -45,7 +45,7 @@ def state_to_vector(state: 'GuandanEnv') -> List[float]:
 
 class GuandanEnv:
     def __init__(self, my_hand: List[Card], last_play: Optional[Dict[str, Any]] = None, 
-                 all_hands: Optional[List[List[Card]]] = None, current_player: int = 0, pass_count: int = 0):
+                 all_hands: Optional[List[List[Card]]] = None, current_player: int = 0, pass_count: int = 0, current_level: int = 2):
         """
         Initialize the environment.
         :param my_hand: List of cards for the current player (God View or Player View)
@@ -53,9 +53,11 @@ class GuandanEnv:
         :param all_hands: (Optional) For God View / Self Play - exact hands of all players
         :param current_player: Index of current player (0-3)
         :param pass_count: Current number of consecutive passes
+        :param current_level: Current game level (Rank of Wild Card)
         """
         self.num_players = 4
         self.current_player = current_player
+        self.current_level = current_level
         
         if all_hands:
             self.hands = [sort_hand(h) for h in all_hands]
@@ -151,7 +153,7 @@ class GuandanEnv:
         elif self.last_player_idx == self.current_player:
             effective_last_play = None
             
-        return get_legal_moves(hand, effective_last_play)
+        return get_legal_moves(hand, effective_last_play, current_level=self.current_level)
 
     def step(self, action: Dict[str, Any]):
         """
