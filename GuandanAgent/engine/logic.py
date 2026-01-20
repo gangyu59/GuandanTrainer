@@ -10,7 +10,7 @@ POWER_RANK = {
     "bomb_5_less": 7,
     "steel_plate": 5,
     "wooden_board": 5,
-    "straight": 4,
+    "straight": 5,
     "full_house": 5,
     "triple": 3,
     "pair": 2,
@@ -19,7 +19,7 @@ POWER_RANK = {
 
 # Heuristic Weights
 WEIGHT_POWER = 10
-WEIGHT_HAND_COUNT = 8
+WEIGHT_HAND_COUNT = 15
 
 def get_rank_value(rank_str: str) -> int:
     """Helper to get comparable value for rank."""
@@ -119,7 +119,15 @@ def find_straight_flushes(hand: List[Any], all_combinations: bool = False, wild_
         min_rank = 2
         max_rank = 14 # A
         
-        for start_r in range(min_rank, max_rank - 4 + 1):
+        # Check standard straights (2-6 to 10-A)
+        search_ranges = list(range(min_rank, max_rank - 4 + 1))
+        
+        # Check A-2-3-4-5 (A=14, 2=2, 3=3, 4=4, 5=5)
+        # We handle this as a special sequence of indices
+        special_sequences = [[14, 2, 3, 4, 5]]
+        
+        # Standard Loop
+        for start_r in search_ranges:
             needed_wilds = 0
             sf_cards = []
             
@@ -127,30 +135,40 @@ def find_straight_flushes(hand: List[Any], all_combinations: bool = False, wild_
             for offset in range(5):
                 curr_r = start_r + offset
                 if curr_r in rank_to_cards:
-                    # Pick one card (greedy pick first, DFS handles overlap)
                     sf_cards.append(rank_to_cards[curr_r][0])
                 else:
                     needed_wilds += 1
             
             if needed_wilds <= wild_budget:
-                # Valid candidate!
-                # Note: We don't include actual Wild Card objects here, just the requirement.
-                # Caller needs to handle wild assignment.
-                
-                # Construct description
-                # Map rank index back to label
-                # This is a bit hacky, relying on order map inversion or just knowledge
-                # start_label = [k for k, v in get_rank_index.__globals__['get_rank_index'].__code__.co_consts if isinstance(v, dict)][0] # No wait
-                # Simple lookup
                 r_lookup = {2:'2', 3:'3', 4:'4', 5:'5', 6:'6', 7:'7', 8:'8', 9:'9', 10:'10', 11:'J', 12:'Q', 13:'K', 14:'A'}
                 s_label = r_lookup.get(start_r, str(start_r))
                 e_label = r_lookup.get(start_r+4, str(start_r+4))
                 
                 candidates.append({
                     "action": "play",
-                    "cards": sf_cards, # Only natural cards
+                    "cards": sf_cards, 
                     "wilds_needed": needed_wilds,
                     "desc": f"Play Straight Flush {s_label}-{e_label} ({suit})",
+                    "type": "straight_flush",
+                    "power": POWER_RANK["straight_flush"]
+                })
+        
+        # Special Sequences Loop (A-2-3-4-5)
+        for seq in special_sequences:
+            needed_wilds = 0
+            sf_cards = []
+            for r_idx in seq:
+                if r_idx in rank_to_cards:
+                    sf_cards.append(rank_to_cards[r_idx][0])
+                else:
+                    needed_wilds += 1
+            
+            if needed_wilds <= wild_budget:
+                candidates.append({
+                    "action": "play",
+                    "cards": sf_cards, 
+                    "wilds_needed": needed_wilds,
+                    "desc": f"Play Straight Flush A-5 ({suit})",
                     "type": "straight_flush",
                     "power": POWER_RANK["straight_flush"]
                 })
@@ -604,8 +622,17 @@ def find_consecutive_groups(groups: List[List[Any]], count: int, width: int, wil
     min_r = 2
     max_r = 14
     
-    for start_r in range(min_r, max_r - count + 2):
+    search_ranges = list(range(min_r, max_r - count + 2))
+    
+    # Special Sequence for A-2-3-4-5 (if count == 5)
+    special_sequences = []
+    if count == 5 and width == 1: # Only for Straights
+        special_sequences.append([14, 2, 3, 4, 5])
+    
+    # Standard Sequences
+    for start_r in search_ranges:
         # Check this window [start_r, start_r + count - 1]
+        # ... logic ...
         
         # Try to form candidates at increasing depth k=0, 1, ...
         # We stop when we run out of wilds/cards for a depth.
@@ -661,7 +688,6 @@ def find_consecutive_groups(groups: List[List[Any]], count: int, width: int, wil
 
             # VARIATION LOGIC:
             # If width == 1 (Straights), try to swap cards if alternatives exist.
-            # This helps avoid overlap with other groups (e.g. Straight Flush) that greedily pick specific cards.
             if width == 1 and k == 0 and cand_wilds_needed <= wild_budget:
                  # For each rank in sequence
                  for offset in range(count):
@@ -669,19 +695,68 @@ def find_consecutive_groups(groups: List[List[Any]], count: int, width: int, wil
                      cards_at_rank = rank_map.get(curr_r, [])
                      # Check if we have an alternative card (index 1)
                      if len(cards_at_rank) > 1:
-                         # Create a variant candidate using the second card at this rank
-                         # Note: cand_cards[offset] corresponds to rank `curr_r` because width=1 and loop is sequential
                          if offset < len(cand_cards):
                              variant_cards = list(cand_cards)
-                             variant_cards[offset] = cards_at_rank[1]
+                             # Note: cand_cards might be shorter if wilds used? 
+                             # But for width=1, cand_cards length = count - wilds_used
+                             # If we have wild, we might not have card at offset?
+                             # Logic: rank_map has cards. 
+                             # If we took a card for this rank, it is in cand_cards.
+                             # But finding WHICH index in cand_cards corresponds to `curr_r` is tricky if there are wilds.
+                             # Actually, cand_cards order matches sequence order ONLY if we append in order.
+                             # We append in loop order.
+                             # But if we skip a rank (wild), we append nothing.
+                             # So we need to track index in cand_cards.
                              
-                             candidates.append({
-                                "action": "play",
-                                "cards": variant_cards,
-                                "wilds_needed": cand_wilds_needed,
-                                "desc": f"Play {t_name.replace('_', ' ').title()} {start_label}-{end_label} (Var)",
-                                "type": t_name
-                             })
+                             # Re-calculate index
+                             c_idx = 0
+                             found_card_idx = -1
+                             for o2 in range(offset):
+                                 r2 = start_r + o2
+                                 if rank_map.get(r2) and k < len(rank_map.get(r2)):
+                                     c_idx += 1
+                             
+                             # Now c_idx points to the card for `curr_r` IF it exists
+                             if c_idx < len(cand_cards) and rank_map.get(curr_r) and k < len(rank_map.get(curr_r)):
+                                  variant_cards[c_idx] = cards_at_rank[1]
+                                  candidates.append({
+                                    "action": "play",
+                                    "cards": variant_cards,
+                                    "wilds_needed": cand_wilds_needed,
+                                    "desc": f"Play {t_name.replace('_', ' ').title()} {start_label}-{end_label} (Var)",
+                                    "type": t_name
+                                 })
+
+    # Special Sequences (A-2-3-4-5)
+    for seq in special_sequences:
+        for k in range(100):
+            cand_cards = []
+            cand_wilds_needed = 0
+            
+            for r_idx in seq:
+                cards_at_rank = rank_map.get(r_idx, [])
+                s_idx = k * width
+                e_idx = s_idx + width
+                available_count = len(cards_at_rank)
+                
+                if s_idx < available_count:
+                    take_end = min(e_idx, available_count)
+                    cand_cards.extend(cards_at_rank[s_idx:take_end])
+                    taken_count = take_end - s_idx
+                    cand_wilds_needed += (width - taken_count)
+                else:
+                    cand_wilds_needed += width
+            
+            if cand_wilds_needed > wild_budget:
+                break
+                
+            candidates.append({
+                "action": "play",
+                "cards": cand_cards,
+                "wilds_needed": cand_wilds_needed,
+                "desc": f"Play Straight A-5",
+                "type": "straight"
+            })
             
     return candidates
 
