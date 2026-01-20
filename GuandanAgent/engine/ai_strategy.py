@@ -174,6 +174,13 @@ def mcts_strategy(state: Any) -> Dict[str, Any]:
     win_rate_pct = best_action.get('win_rate', 0.5) * 100
     visits = best_action.get('visits', 0)
     
+    # Save Stats
+    try:
+        from backend.stats import save_stat
+        save_stat(best_action.get('win_rate', 0.5), hand_eval['score'], visits)
+    except:
+        pass # Don't block game logic
+    
     return {
         **best_action,
         "message": f"MCTS: {best_action.get('desc', 'Unknown')} (WinRate: {win_rate_pct:.1f}%)",

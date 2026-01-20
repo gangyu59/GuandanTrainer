@@ -1,0 +1,602 @@
+[
+  {
+    "timestamp": 1768839428.355552,
+    "win_rate": 0.4861809045226131,
+    "hand_score": 14,
+    "iterations": 398
+  },
+  {
+    "timestamp": 1768839431.176431,
+    "win_rate": 0.4975669099756691,
+    "hand_score": 11,
+    "iterations": 411
+  },
+  {
+    "timestamp": 1768839433.6975458,
+    "win_rate": 0.5097765363128491,
+    "hand_score": 5,
+    "iterations": 358
+  },
+  {
+    "timestamp": 1768839436.2272158,
+    "win_rate": 1.0,
+    "hand_score": 8,
+    "iterations": 219
+  },
+  {
+    "timestamp": 1768839440.3290758,
+    "win_rate": 0.49873417721518987,
+    "hand_score": 14,
+    "iterations": 395
+  },
+  {
+    "timestamp": 1768839443.1633945,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 393
+  },
+  {
+    "timestamp": 1768839445.6914427,
+    "win_rate": 0.5023255813953489,
+    "hand_score": 5,
+    "iterations": 430
+  },
+  {
+    "timestamp": 1768839448.2239661,
+    "win_rate": 1.0,
+    "hand_score": 7,
+    "iterations": 301
+  },
+  {
+    "timestamp": 1768839452.15623,
+    "win_rate": 0.5,
+    "hand_score": 14,
+    "iterations": 374
+  },
+  {
+    "timestamp": 1768839454.9795141,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 441
+  },
+  {
+    "timestamp": 1768839457.4982827,
+    "win_rate": 0.5024570024570024,
+    "hand_score": 5,
+    "iterations": 407
+  },
+  {
+    "timestamp": 1768839460.0170565,
+    "win_rate": 0.9906367041198502,
+    "hand_score": 3,
+    "iterations": 534
+  },
+  {
+    "timestamp": 1768839465.2050664,
+    "win_rate": 0.5,
+    "hand_score": 14,
+    "iterations": 395
+  },
+  {
+    "timestamp": 1768839468.0412042,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 400
+  },
+  {
+    "timestamp": 1768839470.5583572,
+    "win_rate": 0.5,
+    "hand_score": 5,
+    "iterations": 467
+  },
+  {
+    "timestamp": 1768839473.0747743,
+    "win_rate": 0.5,
+    "hand_score": 2,
+    "iterations": 5783
+  },
+  {
+    "timestamp": 1768839475.6050448,
+    "win_rate": 0.5,
+    "hand_score": 14,
+    "iterations": 373
+  },
+  {
+    "timestamp": 1768839478.446632,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 373
+  },
+  {
+    "timestamp": 1768839480.9713287,
+    "win_rate": 0.5103092783505154,
+    "hand_score": 5,
+    "iterations": 97
+  },
+  {
+    "timestamp": 1768839485.3484447,
+    "win_rate": 0.5,
+    "hand_score": 14,
+    "iterations": 410
+  },
+  {
+    "timestamp": 1768839488.1727386,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 391
+  },
+  {
+    "timestamp": 1768839490.6907864,
+    "win_rate": 0.6887254901960784,
+    "hand_score": 5,
+    "iterations": 204
+  },
+  {
+    "timestamp": 1768839495.6196713,
+    "win_rate": 0.5,
+    "hand_score": 14,
+    "iterations": 313
+  },
+  {
+    "timestamp": 1768839790.0798736,
+    "win_rate": 0.5,
+    "hand_score": 17,
+    "iterations": 34
+  },
+  {
+    "timestamp": 1768839794.6179998,
+    "win_rate": 0.5,
+    "hand_score": 33,
+    "iterations": 116
+  },
+  {
+    "timestamp": 1768839799.9091828,
+    "win_rate": 0.5,
+    "hand_score": 37,
+    "iterations": 177
+  },
+  {
+    "timestamp": 1768839804.3700051,
+    "win_rate": 0.5,
+    "hand_score": 45,
+    "iterations": 390
+  },
+  {
+    "timestamp": 1768839807.1935015,
+    "win_rate": 0.5,
+    "hand_score": 15,
+    "iterations": 363
+  },
+  {
+    "timestamp": 1768839809.716745,
+    "win_rate": 0.4973958333333333,
+    "hand_score": 23,
+    "iterations": 384
+  },
+  {
+    "timestamp": 1768839812.2387934,
+    "win_rate": 0.5,
+    "hand_score": 16,
+    "iterations": 42
+  },
+  {
+    "timestamp": 1768839816.4128613,
+    "win_rate": 0.5,
+    "hand_score": 45,
+    "iterations": 209
+  },
+  {
+    "timestamp": 1768839821.2004237,
+    "win_rate": 0.5,
+    "hand_score": 15,
+    "iterations": 359
+  },
+  {
+    "timestamp": 1768839823.7185652,
+    "win_rate": 0.49890829694323147,
+    "hand_score": 23,
+    "iterations": 458
+  },
+  {
+    "timestamp": 1768839826.2448127,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 403
+  },
+  {
+    "timestamp": 1768839828.7613678,
+    "win_rate": 0.5,
+    "hand_score": 27,
+    "iterations": 36
+  },
+  {
+    "timestamp": 1768839833.5348735,
+    "win_rate": 0.5,
+    "hand_score": 15,
+    "iterations": 407
+  },
+  {
+    "timestamp": 1768839836.0648994,
+    "win_rate": 0.5,
+    "hand_score": 23,
+    "iterations": 367
+  },
+  {
+    "timestamp": 1768839838.5990882,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 406
+  },
+  {
+    "timestamp": 1768839841.1145487,
+    "win_rate": 0.5,
+    "hand_score": 12,
+    "iterations": 43
+  },
+  {
+    "timestamp": 1768839846.1431692,
+    "win_rate": 0.5,
+    "hand_score": 15,
+    "iterations": 201
+  },
+  {
+    "timestamp": 1768839850.7803037,
+    "win_rate": 0.5,
+    "hand_score": 23,
+    "iterations": 224
+  },
+  {
+    "timestamp": 1768839855.1015599,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 402
+  },
+  {
+    "timestamp": 1768839857.620385,
+    "win_rate": 0.4989130434782609,
+    "hand_score": 13,
+    "iterations": 460
+  },
+  {
+    "timestamp": 1768839860.4425793,
+    "win_rate": 0.5,
+    "hand_score": 15,
+    "iterations": 364
+  },
+  {
+    "timestamp": 1768839862.9723852,
+    "win_rate": 0.5,
+    "hand_score": 13,
+    "iterations": 41
+  },
+  {
+    "timestamp": 1768839867.1793404,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 372
+  },
+  {
+    "timestamp": 1768839869.7047563,
+    "win_rate": 0.5,
+    "hand_score": 13,
+    "iterations": 464
+  },
+  {
+    "timestamp": 1768839872.5262208,
+    "win_rate": 0.5,
+    "hand_score": 15,
+    "iterations": 209
+  },
+  {
+    "timestamp": 1768839877.2622943,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 452
+  },
+  {
+    "timestamp": 1768839879.777764,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 404
+  },
+  {
+    "timestamp": 1768839882.2930498,
+    "win_rate": 0.5,
+    "hand_score": 13,
+    "iterations": 455
+  },
+  {
+    "timestamp": 1768839885.1144452,
+    "win_rate": 0.5094339622641509,
+    "hand_score": 11,
+    "iterations": 53
+  },
+  {
+    "timestamp": 1768839889.2702677,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 393
+  },
+  {
+    "timestamp": 1768839891.799217,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 429
+  },
+  {
+    "timestamp": 1768839894.3246744,
+    "win_rate": 0.49894736842105264,
+    "hand_score": 13,
+    "iterations": 475
+  },
+  {
+    "timestamp": 1768839897.1452632,
+    "win_rate": 0.5684931506849316,
+    "hand_score": 5,
+    "iterations": 73
+  },
+  {
+    "timestamp": 1768839901.2528594,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 462
+  },
+  {
+    "timestamp": 1768839903.778302,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 403
+  },
+  {
+    "timestamp": 1768839906.299452,
+    "win_rate": 0.5,
+    "hand_score": 13,
+    "iterations": 493
+  },
+  {
+    "timestamp": 1768839909.1170433,
+    "win_rate": 0.6461038961038961,
+    "hand_score": 2,
+    "iterations": 308
+  },
+  {
+    "timestamp": 1768839913.8910735,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 497
+  },
+  {
+    "timestamp": 1768839916.405055,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 447
+  },
+  {
+    "timestamp": 1768839918.9203143,
+    "win_rate": 0.5,
+    "hand_score": 13,
+    "iterations": 425
+  },
+  {
+    "timestamp": 1768839921.7315118,
+    "win_rate": 0.9417249417249417,
+    "hand_score": 3,
+    "iterations": 429
+  },
+  {
+    "timestamp": 1768839925.9172392,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 474
+  },
+  {
+    "timestamp": 1768839928.429052,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 366
+  },
+  {
+    "timestamp": 1768839930.9507813,
+    "win_rate": 0.5,
+    "hand_score": 13,
+    "iterations": 450
+  },
+  {
+    "timestamp": 1768839933.7656841,
+    "win_rate": 0.99644128113879,
+    "hand_score": 4,
+    "iterations": 281
+  },
+  {
+    "timestamp": 1768839937.7734792,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 435
+  },
+  {
+    "timestamp": 1768839940.3759022,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 470
+  },
+  {
+    "timestamp": 1768839942.8964581,
+    "win_rate": 0.5,
+    "hand_score": 13,
+    "iterations": 472
+  },
+  {
+    "timestamp": 1768839945.7143483,
+    "win_rate": 1.0,
+    "hand_score": 5,
+    "iterations": 286
+  },
+  {
+    "timestamp": 1768839949.8474028,
+    "win_rate": 0.49890350877192985,
+    "hand_score": 11,
+    "iterations": 456
+  },
+  {
+    "timestamp": 1768839952.3640068,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 444
+  },
+  {
+    "timestamp": 1768839954.8839602,
+    "win_rate": 0.5,
+    "hand_score": 13,
+    "iterations": 460
+  },
+  {
+    "timestamp": 1768839957.6962276,
+    "win_rate": 0.9862068965517241,
+    "hand_score": 6,
+    "iterations": 580
+  },
+  {
+    "timestamp": 1768839962.0331273,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 417
+  },
+  {
+    "timestamp": 1768839964.5504756,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 410
+  },
+  {
+    "timestamp": 1768839967.0668223,
+    "win_rate": 0.5010526315789474,
+    "hand_score": 13,
+    "iterations": 475
+  },
+  {
+    "timestamp": 1768839969.8829927,
+    "win_rate": 0.5,
+    "hand_score": 4,
+    "iterations": 5928
+  },
+  {
+    "timestamp": 1768839972.4019501,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 397
+  },
+  {
+    "timestamp": 1768839974.9161606,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 419
+  },
+  {
+    "timestamp": 1768839977.431685,
+    "win_rate": 0.5078125,
+    "hand_score": 13,
+    "iterations": 64
+  },
+  {
+    "timestamp": 1768839981.706756,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 468
+  },
+  {
+    "timestamp": 1768839984.2323909,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 460
+  },
+  {
+    "timestamp": 1768839986.7524183,
+    "win_rate": 0.7432950191570882,
+    "hand_score": 4,
+    "iterations": 261
+  },
+  {
+    "timestamp": 1768839991.145601,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 418
+  },
+  {
+    "timestamp": 1768839993.6586936,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 433
+  },
+  {
+    "timestamp": 1768839996.1768217,
+    "win_rate": 0.7840909090909092,
+    "hand_score": 5,
+    "iterations": 176
+  },
+  {
+    "timestamp": 1768840000.7999468,
+    "win_rate": 0.4988344988344988,
+    "hand_score": 11,
+    "iterations": 429
+  },
+  {
+    "timestamp": 1768840003.319412,
+    "win_rate": 0.4988479262672811,
+    "hand_score": 8,
+    "iterations": 434
+  },
+  {
+    "timestamp": 1768840005.8418388,
+    "win_rate": 1.0,
+    "hand_score": 3,
+    "iterations": 239
+  },
+  {
+    "timestamp": 1768840010.7687504,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 406
+  },
+  {
+    "timestamp": 1768840013.299714,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 473
+  },
+  {
+    "timestamp": 1768840015.8146818,
+    "win_rate": 0.9945054945054945,
+    "hand_score": 4,
+    "iterations": 182
+  },
+  {
+    "timestamp": 1768840019.962831,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 339
+  },
+  {
+    "timestamp": 1768840022.4904606,
+    "win_rate": 0.5,
+    "hand_score": 8,
+    "iterations": 395
+  },
+  {
+    "timestamp": 1768840025.0117176,
+    "win_rate": 1.0,
+    "hand_score": 5,
+    "iterations": 233
+  },
+  {
+    "timestamp": 1768850559.453931,
+    "win_rate": 0.5,
+    "hand_score": 11,
+    "iterations": 239
+  },
+  {
+    "timestamp": 1768871008.6832407,
+    "win_rate": 0.5,
+    "hand_score": 43,
+    "iterations": 32
+  }
+]

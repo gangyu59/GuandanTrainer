@@ -58,6 +58,23 @@ GuandanTrainer/
 ├── requirements.txt
 └── README.md                  # 项目说明文档
 
+# Release Notes
+
+## v2.6 (Current)
+- **AI Backend Migration**: Moved AI decision logic to Python backend (`GuandanAgent/engine`).
+- **LLM Integration**: Integrated ARK/DouBao LLM for strategic decision making via hybrid architecture.
+- **Visual AI Reasoning**: Added "AI推理和推荐" (AI Reasoning & Suggestion) modal to frontend.
+  - Displays real-time AI thought process in Chinese.
+  - Maintains scrollable history of AI reasoning.
+  - **Smart Highlighting**: Automatically highlights AI-recommended cards in non-autopilot mode for one-click play.
+- **Card Type Support**: 
+  - Single, Pair, Triple, Full House (3+2), Bomb.
+  - (In Progress) Straight, Steel Plate, Wooden Board, Straight Flush.
+- **Performance**: Removed artificial delays for faster gameplay.
+
+## v2.5
+- Initial Backend API implementation.
+- Basic rule-based AI in Python.
 
 目标：
 

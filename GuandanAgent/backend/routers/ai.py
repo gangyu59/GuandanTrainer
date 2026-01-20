@@ -23,6 +23,9 @@ class MoveResponse(BaseModel):
     message: Optional[str] = None
     reasoning: Optional[str] = None
     algorithm: Optional[str] = None # "MCTS", "LLM", "Greedy"
+    win_rate: Optional[float] = None
+    visits: Optional[int] = None
+    llm_recommendation: Optional[Dict[str, Any]] = None # Structured LLM advice
 
 @router.post("/suggest_move", response_model=MoveResponse)
 async def suggest_move(state: GameStateModel):
@@ -34,31 +37,37 @@ async def suggest_move(state: GameStateModel):
         from engine.ai_strategy import llm_strategy, mcts_strategy
         
         # 1. Run MCTS (Primary Strategy)
-        # This is the "AlphaGo" direction the user requested.
         mcts_decision = mcts_strategy(state)
         
         # 2. Run LLM (Secondary/Comparison)
-        # Kept as requested for comparison.
-        # We catch errors here so LLM failure doesn't block the game.
         llm_decision = None
         try:
-             llm_decision = llm_strategy(state)
+            # We run LLM only for comparison, not for actual play
+            llm_decision = llm_strategy(state)
         except Exception as e:
-             print(f"LLM Strategy Failed: {e}")
+            print(f"LLM Strategy Failed: {e}")
         
-        # Combine reasoning for display
+        # 3. Construct Final Response
         final_decision = mcts_decision
         final_decision['algorithm'] = "MCTS"
         
-        comparison_text = ""
+        # Add LLM comparison data if available
         if llm_decision:
-            llm_desc = llm_decision.get('desc', llm_decision.get('action'))
-            comparison_text = f"\n\n[Comparison] LLM suggested: {llm_desc}\nLLM Reasoning: {llm_decision.get('reasoning', 'None')}"
+            final_decision['llm_recommendation'] = {
+                "action": llm_decision.get('action'),
+                "cards": llm_decision.get('cards'),
+                "desc": llm_decision.get('desc', llm_decision.get('message')),
+                "reasoning": llm_decision.get('reasoning')
+            }
             
-        final_decision['reasoning'] = (final_decision.get('reasoning', '') or '') + comparison_text
-        
         return final_decision
 
     except Exception as e:
         print(f"Error in suggest_move: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/stats")
+async def get_stats():
+    """Get training stats for dashboard."""
+    from backend.stats import get_dashboard_data
+    return get_dashboard_data()

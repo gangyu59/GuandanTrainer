@@ -136,7 +136,24 @@ class GuandanEnv:
             return self, 1 if player == 0 else -1, True, {}
             
         # Next player
-        self.current_player = (self.current_player + 1) % 4
+        # If 3 consecutive passes (pass_count == 3), the round is over.
+        # But we handle "next turn logic" inside get_legal_actions (it sees pass_count).
+        # However, we must ensure if someone finished, "Jie Feng" (Passing the Wind) logic applies.
+        
+        # Standard Next
+        next_player = (self.current_player + 1) % 4
+        
+        # Jie Feng Logic:
+        # If the round is ending (pass_count == 3) and the last player who played cards (last_player_idx)
+        # has finished their hand, then the lead passes to their PARTNER.
+        if self.pass_count == 3:
+            winner_idx = self.last_player_idx
+            if winner_idx != -1 and len(self.hands[winner_idx]) == 0:
+                # Winner finished. Pass control to partner.
+                partner_idx = (winner_idx + 2) % 4
+                next_player = partner_idx
+                
+        self.current_player = next_player
         
         return self, 0, False, {}
 

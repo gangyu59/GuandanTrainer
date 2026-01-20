@@ -79,29 +79,40 @@ export function App() {
   const [aiLogs, setAiLogs] = useState<Array<{ reasoning: string, message: string, timestamp: number }>>([]);
   const logsEndRef = React.useRef<HTMLDivElement>(null);
   const [lastRecommendedCards, setLastRecommendedCards] = useState<Card[] | null>(null);
+  const [lastAiDecision, setLastAiDecision] = useState<any>(null);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [dashboardData, setDashboardData] = useState<any>(null);
 
   // Draggable Modal State
   const [aiModalPos, setAiModalPos] = useState({ x: window.innerWidth - 420, y: window.innerHeight - 500 });
-  const [isDragging, setIsDragging] = useState(false);
+  const [dashboardPos, setDashboardPos] = useState({ x: 100, y: 100 });
+  const [activeDrag, setActiveDrag] = useState<"ai" | "dashboard" | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     // Adjust initial position to be visible
     setAiModalPos({ x: window.innerWidth - 420, y: window.innerHeight - 500 });
+    setDashboardPos({ x: window.innerWidth / 2 - 350, y: window.innerHeight / 2 - 300 });
   }, []);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
+  const handleMouseDown = (e: React.MouseEvent, type: "ai" | "dashboard") => {
+    setActiveDrag(type);
+    const currentPos = type === "ai" ? aiModalPos : dashboardPos;
     setDragOffset({
-      x: e.clientX - aiModalPos.x,
-      y: e.clientY - aiModalPos.y
+      x: e.clientX - currentPos.x,
+      y: e.clientY - currentPos.y
     });
   };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging) {
+      if (activeDrag === "ai") {
         setAiModalPos({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y
+        });
+      } else if (activeDrag === "dashboard") {
+        setDashboardPos({
           x: e.clientX - dragOffset.x,
           y: e.clientY - dragOffset.y
         });
@@ -109,10 +120,10 @@ export function App() {
     };
 
     const handleMouseUp = () => {
-      setIsDragging(false);
+      setActiveDrag(null);
     };
 
-    if (isDragging) {
+    if (activeDrag) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
@@ -120,7 +131,7 @@ export function App() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragOffset]);
+  }, [activeDrag, dragOffset]);
   const [passCount, setPassCount] = useState(0);
   const [finishedPlayers, setFinishedPlayers] = useState<number[]>([]);
   const [gameOver, setGameOver] = useState(false);
@@ -175,6 +186,26 @@ export function App() {
 
     pingHealth();
   }, []);
+
+  async function fetchDashboardData() {
+    try {
+      const response = await fetch(`${API_BASE}/stats`);
+      if (response.ok) {
+        const data = await response.json();
+        setDashboardData(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch stats", e);
+    }
+  }
+
+  useEffect(() => {
+    if (showDashboard) {
+      fetchDashboardData();
+      const interval = setInterval(fetchDashboardData, 2000); // Auto refresh
+      return () => clearInterval(interval);
+    }
+  }, [showDashboard]);
 
   async function handleRestartMatch() {
     setTeamLevels({ self: 2, opponent: 2 });
@@ -374,6 +405,7 @@ export function App() {
 
         if (response.ok) {
             const data = await response.json();
+            setLastAiDecision(data);
             
             if (data.reasoning) {
                 setAiLogs(prev => [...prev, {
@@ -1100,12 +1132,166 @@ export function App() {
 
         <div id="settings-container">
           <button
+            type="button"
+            onClick={() => setShowDashboard(true)}
+            style={{ fontSize: "24px", background: "none", border: "none", cursor: "pointer", marginRight: "10px" }}
+          >
+            📊
+          </button>
+          <button
             id="settings-btn"
             type="button"
             onClick={() => setSettingsOpen((value) => !value)}
           >
             ⚙️
           </button>
+          {showDashboard && (
+            <div style={{
+              position: "fixed",
+              top: dashboardPos.y,
+              left: dashboardPos.x,
+              background: "rgba(255, 255, 255, 0.98)",
+              padding: "0",
+              borderRadius: "10px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+              zIndex: 3000,
+              width: "700px",
+              maxHeight: "80vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              color: "#333",
+              border: "1px solid #ccc"
+            }}>
+              <div 
+                onMouseDown={(e) => handleMouseDown(e, "dashboard")}
+                style={{
+                  display:"flex", 
+                  justifyContent:"space-between", 
+                  alignItems:"center", 
+                  padding: "15px 20px",
+                  borderBottom: "1px solid #eee",
+                  cursor: "move",
+                  background: "#f8f9fa",
+                  borderTopLeftRadius: "10px",
+                  borderTopRightRadius: "10px"
+                }}
+              >
+                  <h3 style={{margin:0, color: "#333"}}>📊 训练监控 & 决策对比</h3>
+                  <button onClick={() => setShowDashboard(false)} style={{border:"none", background:"none", fontSize:"24px", cursor:"pointer", color: "#666"}}>×</button>
+              </div>
+
+              <div style={{padding: "20px", overflowY: "auto", flex: 1}}>
+                
+                {/* Comparison Section */}
+                <div style={{marginBottom: "30px"}}>
+                  <h4 style={{marginTop: 0, borderLeft: "4px solid #2196f3", paddingLeft: "10px", marginBottom: "15px"}}>
+                    本局决策对比 (Decision Comparison)
+                  </h4>
+                  {lastAiDecision ? (
+                    <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px"}}>
+                      {/* MCTS Card */}
+                      <div style={{border: "2px solid #4caf50", borderRadius: "8px", padding: "15px", background: "#f0fff4"}}>
+                        <div style={{fontWeight: "bold", color: "#2e7d32", marginBottom: "10px", display: "flex", justifyContent: "space-between"}}>
+                          <span>🤖 AlphaGo (MCTS)</span>
+                          <span style={{fontSize: "12px", background: "#4caf50", color: "white", padding: "2px 6px", borderRadius: "4px"}}>Primary</span>
+                        </div>
+                        <div style={{fontSize: "18px", fontWeight: "bold", marginBottom: "8px"}}>
+                          {lastAiDecision.action === "pass" ? "Pass (不要)" : lastAiDecision.desc || "Play Cards"}
+                        </div>
+                        <div style={{fontSize: "13px", color: "#555", lineHeight: "1.4"}}>
+                           <div>Win Rate: <b>{(lastAiDecision.win_rate * 100).toFixed(1)}%</b></div>
+                           <div>Visits: {lastAiDecision.visits}</div>
+                           <div style={{marginTop: "5px", fontStyle: "italic"}}>{lastAiDecision.reasoning?.split('[Comparison]')[0]}</div>
+                        </div>
+                      </div>
+
+                      {/* LLM Card */}
+                      <div style={{border: "2px solid #9c27b0", borderRadius: "8px", padding: "15px", background: "#fdf4ff"}}>
+                        <div style={{fontWeight: "bold", color: "#7b1fa2", marginBottom: "10px", display: "flex", justifyContent: "space-between"}}>
+                          <span>🧠 LLM (Reference)</span>
+                          <span style={{fontSize: "12px", background: "#9c27b0", color: "white", padding: "2px 6px", borderRadius: "4px"}}>Comparison</span>
+                        </div>
+                        {lastAiDecision.llm_recommendation ? (
+                          <>
+                            <div style={{fontSize: "18px", fontWeight: "bold", marginBottom: "8px"}}>
+                              {lastAiDecision.llm_recommendation.action === "pass" ? "Pass (不要)" : lastAiDecision.llm_recommendation.desc || "Play Cards"}
+                            </div>
+                            <div style={{fontSize: "13px", color: "#555", lineHeight: "1.4"}}>
+                              <div style={{marginTop: "5px", fontStyle: "italic"}}>{lastAiDecision.llm_recommendation.reasoning}</div>
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{color: "#999", fontStyle: "italic"}}>LLM skipped or failed</div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{textAlign: "center", color: "#999", padding: "20px", background: "#f5f5f5", borderRadius: "8px"}}>
+                      Waiting for AI decision...
+                    </div>
+                  )}
+                </div>
+
+                {/* Stats Section */}
+                <div>
+                  <h4 style={{marginTop: 0, borderLeft: "4px solid #4caf50", paddingLeft: "10px", marginBottom: "15px"}}>
+                    训练数据 (Training Stats)
+                  </h4>
+                  {dashboardData ? (
+                    <div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
+                          <div style={{ background: "#f8f9fa", padding: "15px", borderRadius: "8px", textAlign: "center" }}>
+                            <div style={{ color: "#666", fontSize: "14px" }}>总决策次数</div>
+                            <div style={{ fontSize: "24px", fontWeight: "bold", color: "#2196f3" }}>
+                              {dashboardData.summary?.total_games || 0}
+                            </div>
+                          </div>
+                          <div style={{ background: "#f8f9fa", padding: "15px", borderRadius: "8px", textAlign: "center" }}>
+                            <div style={{ color: "#666", fontSize: "14px" }}>平均胜率预估</div>
+                            <div style={{ fontSize: "24px", fontWeight: "bold", color: "#4caf50" }}>
+                              {((dashboardData.summary?.avg_win_rate || 0) * 100).toFixed(1)}%
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ marginBottom: "20px" }}>
+                          <div style={{fontSize: "14px", fontWeight: "bold", marginBottom: "5px", color: "#555"}}>胜率趋势 (Win Rate)</div>
+                          <div style={{ height: "100px", display: "flex", alignItems: "flex-end", gap: "2px", background: "#f0f0f0", padding: "10px", borderRadius: "4px", overflowX: "auto" }}>
+                            {dashboardData.history?.map((d: any, i: number) => (
+                              <div key={i} style={{
+                                width: "8px",
+                                height: `${d.win_rate * 100}%`,
+                                backgroundColor: "#4caf50",
+                                opacity: 0.8,
+                                flexShrink: 0
+                              }} title={`Move ${i+1}: ${(d.win_rate * 100).toFixed(1)}%`} />
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{fontSize: "14px", fontWeight: "bold", marginBottom: "5px", color: "#555"}}>手牌评分趋势 (Hand Score)</div>
+                          <div style={{ height: "100px", display: "flex", alignItems: "flex-end", gap: "2px", background: "#f0f0f0", padding: "10px", borderRadius: "4px", overflowX: "auto" }}>
+                            {dashboardData.history?.map((d: any, i: number) => (
+                              <div key={i} style={{
+                                width: "8px",
+                                height: `${Math.min(d.hand_score * 3, 100)}%`, // Scale visually
+                                backgroundColor: "#2196f3",
+                                opacity: 0.8,
+                                flexShrink: 0
+                              }} title={`Move ${i+1}: ${d.hand_score}`} />
+                            ))}
+                          </div>
+                        </div>
+                    </div>
+                  ) : (
+                    <div style={{textAlign: "center", padding: "20px"}}>加载数据中...</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           {settingsOpen ? (
             <>
               <div
@@ -1417,7 +1603,7 @@ export function App() {
               alignItems: 'center',
               userSelect: 'none'
             }}
-            onMouseDown={handleMouseDown}
+            onMouseDown={(e) => handleMouseDown(e, "ai")}
           >
             <span style={{ fontWeight: 'bold' }}>AI推理和推荐</span>
             <button 

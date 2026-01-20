@@ -134,7 +134,7 @@ class MCTS:
                 break
             
             # Heuristic Policy
-            action = self._heuristic_policy(actions)
+            action = self._heuristic_policy(actions, current_state)
             
             _, reward, done, _ = current_state.step(action)
             if done:
@@ -143,14 +143,39 @@ class MCTS:
             
         return 0 # Draw/Cutoff
 
-    def _heuristic_policy(self, actions: List[Dict]) -> Dict:
+    def _heuristic_policy(self, actions: List[Dict], state: GuandanEnv = None) -> Dict:
         """
         Bias towards playing cards (especially small ones) over passing.
         Assume actions are sorted by get_legal_moves (smallest first).
+        
+        Also implements 'No Friendly Fire' for Bombs:
+        Avoid bombing your partner unless necessary.
         """
         play_actions = [a for a in actions if a['action'] != 'pass']
         pass_action = next((a for a in actions if a['action'] == 'pass'), None)
         
+        # 1. Friendly Fire Check
+        # If last play was by partner (current_player + 2 % 4 == last_player_idx)
+        # And action is a Bomb, filter it out ideally.
+        if state and state.last_play and state.last_play.get('type') == 'bomb':
+             current_p = state.current_player
+             last_p = state.last_player_idx
+             is_partner = (current_p + 2) % 4 == last_p
+             
+             if is_partner:
+                 # Filter out bomb actions from candidates
+                 # Unless we have NO other choice (but here play_actions includes bombs)
+                 # We want to avoid *choosing* a bomb if we can pass.
+                 non_bomb_actions = [a for a in play_actions if a.get('type') != 'bomb']
+                 if not non_bomb_actions:
+                     # Only have bombs.
+                     # If partner played bomb, and we only have bigger bombs...
+                     # User says "Generally not". So prefer PASS.
+                     if pass_action:
+                         return pass_action
+                 else:
+                     play_actions = non_bomb_actions
+
         # If must pass or no moves
         if not play_actions:
             return actions[0]
