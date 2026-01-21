@@ -4,13 +4,17 @@ from engine.cards import Card, Rank, Suit
 
 # Power Ranks
 POWER_RANK = {
-    "king_bomb": 14,
-    "bomb_6_plus": 10,
-    "straight_flush": 9,
-    "bomb_5_less": 7,
-    "steel_plate": 5,
-    "wooden_board": 5,
-    "straight": 5,
+    "bomb_8": 13, # Top Tier
+    "bomb_7": 12, # Top Tier
+    "bomb_6": 11, # Strong
+    "bomb_6_plus": 11, # Fallback
+    "straight_flush": 10,
+    "bomb_5": 9,
+    "bomb_4": 8,
+    "bomb_5_less": 8, 
+    "steel_plate": 8,
+    "wooden_board": 8,
+    "straight": 6,
     "full_house": 5,
     "triple": 3,
     "pair": 2,
@@ -18,8 +22,10 @@ POWER_RANK = {
 }
 
 # Heuristic Weights
+# User Request: 70% Hand Count, 30% Power.
+# Weight Ratio 3:1.
 WEIGHT_POWER = 10
-WEIGHT_HAND_COUNT = 15
+WEIGHT_HAND_COUNT = 30
 
 def get_rank_value(rank_str: str) -> int:
     """Helper to get comparable value for rank."""
@@ -383,42 +389,49 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
         # B. Try to form 4+ Bombs (Power 6)
         # C. Form Triples/Pairs/Singles
         
-        # A. Form 6+ Bombs
+        # Determine Level Rank for checks
+        level_rank = None
+        try:
+            if current_level <= 10:
+                level_rank = Rank(str(current_level))
+            elif current_level == 11: level_rank = Rank.J
+            elif current_level == 12: level_rank = Rank.Q
+            elif current_level == 13: level_rank = Rank.K
+            elif current_level == 14: level_rank = Rank.A
+        except:
+            pass
+
+        # Pass 1: Form 4+ Bombs (Priority: Quantity over Quality)
+        # We prioritize turning Triples/Pairs into Bombs (Power 7) over making existing Bombs bigger (Power 10).
+        # This addresses user feedback: "5 bombs became 3 bombs".
         for g in groups_data:
             if not current_wilds: break
             count = len(g['cards'])
-            needed = 6 - count
-            if needed > 0 and needed <= len(current_wilds):
-                # Check if it's worth it? (Power 10 vs using wilds elsewhere)
-                # Generally yes, Power 10 is max.
-                use = current_wilds[:needed]
-                g['cards'].extend(use)
-                current_wilds = current_wilds[needed:]
-        
-        # B. Form 4+ Bombs (if not already 6+)
-        for g in groups_data:
-            if not current_wilds: break
-            count = len(g['cards'])
-            if count >= 6: continue # Already handled
             
+            # Skip if already a decent bomb (6+)
+            if count >= 4: continue
+
+            # Skip if this group is composed of Level Cards (Rank == current_level)
+            # User Feedback: "Stupid to form a bomb with 4 level cards, especially using Red Hearts".
+            # Level cards are high control singles.
+            if level_rank and g.get('rank') == level_rank:
+                continue
+            
+            # Target 4 cards
             needed = 4 - count
             if needed > 0 and needed <= len(current_wilds):
                 use = current_wilds[:needed]
                 g['cards'].extend(use)
                 current_wilds = current_wilds[needed:]
-                
-        # C. Leftover Wilds
-        # Can we upgrade any Bomb to 6? (e.g. 4 -> 6)
-        for g in groups_data:
-            if not current_wilds: break
-            count = len(g['cards'])
-            if count >= 4 and count < 6:
-                needed = 6 - count
-                if needed <= len(current_wilds):
-                    use = current_wilds[:needed]
-                    g['cards'].extend(use)
-                    current_wilds = current_wilds[needed:]
 
+        # Pass 2 & 3 Removed: Do not upgrade bombs with wilds.
+        # User Feedback: "Two bombs are bigger than one slightly larger bomb."
+        # "Using a wild card to make a multi-card bomb is not as good as making an extra bomb."
+        # We preserve wilds for other uses (or just as high singles/pairs) rather than extending bombs.
+            
+        # Pass 3: Upgrade 4-Bombs to 5-Bombs? (No, Power difference usually small 7->8)
+        # But we might have leftover wilds.
+        
         # D. Any remaining wilds -> Merge into existing groups to reduce singles
         # Try to make Wild Bombs first (Power 6) from pure wilds if we have 4+
         while len(current_wilds) >= 4:
@@ -437,17 +450,25 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
             # Prioritize groups < 4 to improve their structure
             for g in groups_data:
                 if len(g['cards']) < 4:
+                    # Skip Level Card groups
+                    if level_rank and g.get('rank') == level_rank:
+                        continue
+                    
                     target = g
                     break
             
-            # If no small group found, add to any group (e.g. make a bigger bomb)
-            if not target and groups_data:
-                target = groups_data[0]
+            # If no small group found, DO NOT force into existing big groups.
+            # Leave wild as a new single (or pair if multiple).
+            # This respects "Two bombs > One big bomb" and preserves control cards.
+            # if not target and groups_data:
+            #    target = groups_data[0]
                 
             if target:
                 target['cards'].append(w)
             else:
-                # No groups exist (was empty hand). Create new single.
+                # No groups exist or no suitable small group. Create new single.
+                # Check if we can merge with existing wild singles?
+                # Actually, simply appending as new group works, they will be scored as Singles/Pairs later.
                 new_group = {"rank": get_rank_from_card(w), "cards": [w], "base_count": 1}
                 groups_data.append(new_group)
 
@@ -484,11 +505,21 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
                 "desc": f"Full House {get_rank_label(t['cards'][0])}"
             })
             
+        # Determine Level Rank for King Bomb detection
+        # Removed as per user instruction: "No King Bomb concept, stupid to form."
+        level_rank = None
+
         # Score others
         for g in bombs_list:
             c = len(g['cards'])
-            p_val = POWER_RANK["bomb_5_less"]
-            if c >= 6: p_val = POWER_RANK["bomb_6_plus"]
+            p_val = POWER_RANK["bomb_4"]
+            
+            if c == 5: p_val = POWER_RANK["bomb_5"]
+            elif c == 6: p_val = POWER_RANK["bomb_6"]
+            elif c == 7: p_val = POWER_RANK["bomb_7"]
+            elif c >= 8: p_val = POWER_RANK["bomb_8"]
+            elif c >= 6: p_val = POWER_RANK["bomb_6_plus"]
+            
             score += p_val * BASE_MULTIPLIER - HAND_PENALTY
             p_groups.append({"type": "bomb", "cards": g['cards'], "power": p_val})
             

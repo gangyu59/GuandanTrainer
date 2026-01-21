@@ -54,6 +54,64 @@ export function formatLevel(level: number): string {
   return level.toString();
 }
 
+function ObservationHand({ cards }: { cards: Card[] }) {
+  const groups = useMemo(() => {
+      return handOptimizer.groupByMinHands(cards);
+  }, [cards]);
+
+  if (!cards || cards.length === 0) return null;
+
+  // Scale down slightly to fit Observation UI (0.6x of Player 0)
+  const SCALE = 0.6;
+  const GROUP_WIDTH = 90 * SCALE;  // 54px
+  const GROUP_HEIGHT = 140 * SCALE; // 84px
+  const CARD_WIDTH = 80 * SCALE;   // 48px
+  const VERTICAL_OFFSET = 18 * SCALE; // 10.8px
+
+  return (
+      <div style={{ 
+        display: "flex", 
+        flexDirection: "row", 
+        alignItems: "flex-end",
+        gap: "2px", 
+        padding: "6px", 
+        background: "rgba(0,0,0,0.5)", 
+        borderRadius: "8px", 
+        backdropFilter: "blur(4px)",
+        maxWidth: "60vw",
+        flexWrap: "wrap",
+        justifyContent: "center"
+      }}>
+          {groups.map((group, groupIndex) => (
+              <div key={groupIndex} style={{ 
+                  position: "relative", 
+                  width: `${GROUP_WIDTH}px`, 
+                  height: `${GROUP_HEIGHT}px`,
+              }}>
+                  {group.map((card, index) => (
+                      <img 
+                          key={index}
+                          src={cardImagePath(card)}
+                          alt={formatCardLabel(card)}
+                          style={{
+                              position: "absolute",
+                              left: "50%",
+                              transform: "translateX(-50%)",
+                              bottom: `${index * VERTICAL_OFFSET}px`,
+                              width: `${CARD_WIDTH}px`,
+                              height: "auto",
+                              borderRadius: "4px",
+                              boxShadow: "0 2px 4px rgba(0,0,0,0.5)",
+                              zIndex: group.length - index
+                          }}
+                      />
+                  ))}
+              </div>
+          ))}
+      </div>
+  );
+}
+
 export function App() {
   const [healthState, setHealthState] = useState<LoadState>("idle");
   const [healthMessage, setHealthMessage] = useState<string | null>(null);
@@ -83,6 +141,7 @@ export function App() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [trainingStats, setTrainingStats] = useState<any>(null);
+  const [observationMode, setObservationMode] = useState(false);
 
   // Draggable Modal State
   const [aiModalPos, setAiModalPos] = useState({ x: window.innerWidth - 420, y: window.innerHeight - 500 });
@@ -1091,46 +1150,76 @@ export function App() {
             </div>
           </div>
           <div
-              className={
-                  "player-icon " +
-                  (currentPlayerIndex === 1 ? "active" : "dimmed")
-              }
               id="player-1-icon"
+              style={{ position: "absolute", zIndex: 300, pointerEvents: "none", display: "flex", flexDirection: "row", alignItems: "center" }}
           >
-            {getRankBadge(1)}
-            {/*<img src="/players/player_1.jpeg" alt="P1" />*/}
-            <img src="/cards/small_joker.jpeg" alt="P1"/>
-            <div className="player-card-count">
-              {(hands[players[1]] ?? game?.hands?.[players[1]] ?? []).length}
+            <div
+                className={
+                    "player-icon " +
+                    (currentPlayerIndex === 1 ? "active" : "dimmed")
+                }
+                style={{ position: "relative", pointerEvents: "auto", marginRight: "10px" }}
+            >
+              {getRankBadge(1)}
+              {/*<img src="/players/player_1.jpeg" alt="P1" />*/}
+              <img src="/cards/small_joker.jpeg" alt="P1"/>
+              <div className="player-card-count">
+                {(hands[players[1]] ?? game?.hands?.[players[1]] ?? []).length}
+              </div>
             </div>
+            {observationMode && (
+              <div style={{ pointerEvents: "none" }}>
+                 <ObservationHand cards={hands[players[1]] ?? game?.hands?.[players[1]] ?? []} />
+              </div>
+            )}
           </div>
           <div
-              className={
-                  "player-icon " +
-                  (currentPlayerIndex === 2 ? "active" : "dimmed")
-              }
               id="player-2-icon"
+              style={{ position: "absolute", zIndex: 300, pointerEvents: "none", display: "flex", flexDirection: "column", alignItems: "center" }}
           >
-            {getRankBadge(2)}
-            {/*<img src="/players/player_2.jpeg" alt="P2" />*/}
-            <img src="/cards/big_joker.jpeg" alt="P2"/>
-            <div className="player-card-count">
-              {(hands[players[2]] ?? game?.hands?.[players[2]] ?? []).length}
+            <div
+                className={
+                    "player-icon " +
+                    (currentPlayerIndex === 2 ? "active" : "dimmed")
+                }
+                style={{ position: "relative", pointerEvents: "auto", marginBottom: "10px" }}
+            >
+              {getRankBadge(2)}
+              {/*<img src="/players/player_2.jpeg" alt="P2" />*/}
+              <img src="/cards/big_joker.jpeg" alt="P2"/>
+              <div className="player-card-count">
+                {(hands[players[2]] ?? game?.hands?.[players[2]] ?? []).length}
+              </div>
             </div>
+            {observationMode && (
+              <div style={{ pointerEvents: "none" }}>
+                 <ObservationHand cards={hands[players[2]] ?? game?.hands?.[players[2]] ?? []} />
+              </div>
+            )}
           </div>
           <div
-              className={
-              "player-icon " +
-                  (currentPlayerIndex === 3 ? "active" : "dimmed")
-              }
               id="player-3-icon"
+              style={{ position: "absolute", zIndex: 300, pointerEvents: "none", display: "flex", flexDirection: "row-reverse", alignItems: "center" }}
           >
-            {getRankBadge(3)}
-            {/*<img src="/players/player_3.jpeg" alt="P3" />*/}
-            <img src="/cards/small_joker.jpeg" alt="P3"/>
-            <div className="player-card-count">
-              {(hands[players[3]] ?? game?.hands?.[players[3]] ?? []).length}
+            <div
+                className={
+                "player-icon " +
+                    (currentPlayerIndex === 3 ? "active" : "dimmed")
+                }
+                style={{ position: "relative", pointerEvents: "auto", marginLeft: "10px" }}
+            >
+              {getRankBadge(3)}
+              {/*<img src="/players/player_3.jpeg" alt="P3" />*/}
+              <img src="/cards/small_joker.jpeg" alt="P3"/>
+              <div className="player-card-count">
+                {(hands[players[3]] ?? game?.hands?.[players[3]] ?? []).length}
+              </div>
             </div>
+            {observationMode && (
+              <div style={{ pointerEvents: "none" }}>
+                 <ObservationHand cards={hands[players[3]] ?? game?.hands?.[players[3]] ?? []} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -1146,6 +1235,15 @@ export function App() {
         </div>
 
         <div id="settings-container">
+          <button
+            id="observation-mode-btn"
+            type="button"
+            onClick={() => setObservationMode((value) => !value)}
+            style={{ fontSize: "24px", background: "none", border: "none", cursor: "pointer", marginRight: "10px" }}
+            title="观察模式 (显示所有手牌)"
+          >
+            👁️
+          </button>
           <button
             type="button"
             onClick={() => setShowDashboard(true)}
