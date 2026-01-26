@@ -1,17 +1,23 @@
+import sys
 import os
+
+# Ensure project root is in path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import time
 import json
 import random
 import torch
 import numpy as np
+import argparse
 from typing import List, Tuple, Any
-from engine.rl.env import GuandanEnv, state_to_vector
-from engine.rl.mcts import MCTS
-from engine.rl.model import ModelManager
-from engine.cards import standard_deck
-from engine.logic import get_rank_value
+from GuandanAgent.engine.rl.env import GuandanEnv, state_to_vector
+from GuandanAgent.engine.rl.mcts import MCTS
+from GuandanAgent.engine.rl.model import ModelManager
+from GuandanAgent.engine.cards import standard_deck
+from GuandanAgent.engine.logic import get_rank_value
 
-def self_play_game(model_manager) -> Tuple[int, List[Tuple[List[float], float]]]:
+def self_play_game(model_manager, opponent_type='mcts') -> Tuple[int, List[Tuple[List[float], float]]]:
     # 1. Deal Cards
     full_deck = standard_deck() * 2
     random.shuffle(full_deck)
@@ -31,8 +37,21 @@ def self_play_game(model_manager) -> Tuple[int, List[Tuple[List[float], float]]]
     env = GuandanEnv(my_hand=[], all_hands=hands, current_player=start_player, current_level=current_level)
     
     # 3. Game Loop
-    mcts = MCTS(model=model_manager) # Pass model wrapper
+    # Agent Config:
+    # Team 0 (Player 0, 2): MCTS with Model (The "Learner")
+    # Team 1 (Player 1, 3): Opponent (Heuristic or MCTS)
     
+    learner_mcts = MCTS(model=model_manager)
+    
+    if opponent_type == 'heuristic':
+        # Pure Heuristic (No MCTS Search, just policy)
+        opponent_mcts = MCTS(model=None) 
+    else: # mcts or self_play
+        # Opponent uses MCTS too
+        # If 'self_play', it shares the same model? 
+        # Yes, AlphaGo Zero self-play uses same model for both sides.
+        opponent_mcts = MCTS(model=model_manager)
+
     steps = 0
     max_steps = 200 # Safety break
     
@@ -49,44 +68,64 @@ def self_play_game(model_manager) -> Tuple[int, List[Tuple[List[float], float]]]
             
         action = None
         
-        # Team 0 uses MCTS (Smart)
-        if current_p in [0, 2]: # Team 0
-            # Create Player View Env (PARTIAL OBSERVABILITY)
-            # The AI should ONLY see its own hand and previous moves.
-            # It should NOT see opponents' hands.
-            # GuandanEnv(my_hand, ...) will randomly distribute other cards.
-            player_view_env = GuandanEnv(
-                my_hand=env.hands[current_p],
-                last_play=env.last_play,
-                current_player=current_p,
-                pass_count=env.pass_count,
-                current_level=current_level
-            )
-            # Use small num_simulations for speed
-            mcts_action_info = mcts.search(player_view_env, num_simulations=30)
+        # Create Player View Env (PARTIAL OBSERVABILITY)
+        player_view_env = GuandanEnv(
+            my_hand=env.hands[current_p],
+            last_play=env.last_play,
+            current_player=current_p,
+            pass_count=env.pass_count,
+            current_level=current_level
+        )
+
+        # Select Agent based on Team
+        if current_p in [0, 2]: # Team 0 (Learner)
+            sims = 50 
+            mcts_action_info = learner_mcts.search(player_view_env, num_simulations=sims)
             action = mcts_action_info
             
-            # Debug: Check if AI is passing too much
-            # if action['type'] == 'pass' and any(m['type'] != 'pass' for m in legal_moves):
-            #     print(f"AI passed! Legal moves: {len(legal_moves)}")
-            
-            # Collect Data
-            # Store state and placeholder for winner (target)
+            # Collect Data only for Learner?
+            # AlphaGo collects for ALL moves in self-play.
+            # But if opponent is Heuristic, maybe we shouldn't learn from Heuristic's moves?
+            # Actually, we learn from the *Outcome* of the state.
+            # If Heuristic made a move, and Lost, we learn that state was Bad.
+            # So yes, collect all data.
             vec = state_to_vector(player_view_env)
-            game_data.append(vec)
+            game_data.append((current_p, vec))
             
-        else:
-            # Simple Heuristic
-            play_actions = [a for a in legal_moves if a['type'] != 'pass']
-            if play_actions:
-                # 80% chance to play if can
-                if random.random() < 0.8:
-                    action = random.choice(play_actions)
-                else:
-                    pass_action = next((a for a in legal_moves if a['type'] == 'pass'), None)
-                    action = pass_action if pass_action else random.choice(play_actions)
+        else: # Team 1 (Opponent)
+            if opponent_type == 'heuristic':
+                # Direct Heuristic Policy (Fast, no Search)
+                # We need access to _heuristic_policy. 
+                # MCTS class has it.
+                lm = player_view_env.get_legal_actions()
+                # Mock state object required by _heuristic_policy
+                # Or just use MCTS with 1 simulation? 
+                # MCTS with 0 simulations runs rollout policy (heuristic).
+                # But search() forces at least 1.
+                # Let's call _heuristic_policy directly.
+                class MockState:
+                    def __init__(self, lp, cl, cp, lpi):
+                        self.last_play = lp
+                        self.current_level = cl
+                        self.current_player = cp
+                        self.last_player_idx = lpi
+                
+                s = MockState(player_view_env.last_play, player_view_env.current_level, player_view_env.current_player, player_view_env.last_player_idx)
+                action = opponent_mcts._heuristic_policy(lm, s)
+                
+                # We also collect data for Heuristic moves?
+                # If we want to learn "Heuristic moves lead to Loss/Win", yes.
+                vec = state_to_vector(player_view_env)
+                game_data.append((current_p, vec))
+                
             else:
-                 action = legal_moves[0]
+                # MCTS Opponent
+                sims = 50
+                mcts_action_info = opponent_mcts.search(player_view_env, num_simulations=sims)
+                action = mcts_action_info
+                
+                vec = state_to_vector(player_view_env)
+                game_data.append((current_p, vec))
                  
         env.step(action)
         
@@ -101,17 +140,21 @@ def self_play_game(model_manager) -> Tuple[int, List[Tuple[List[float], float]]]
     if steps >= max_steps:
         print(f"Game Terminated (Max Steps). Winner: None")
     else:
-        print(f"Game Finished. Winner: Team {winner_team}. Steps: {steps}")
+        # print(f"Game Finished. Winner: Team {winner_team}. Steps: {steps}")
+        pass
         
     # Return Data
-    # Label data with winner: +1 if Team 0 won, -1 if Team 1 won
-    # If no winner (draw/timeout), use 0 or ignore? Let's use 0.
     if winner_team == -1:
-        target = 0.0
+        labeled_data = [] # Discard draws/incomplete
     else:
-        target = 1.0 if winner_team == 0 else -1.0
-        
-    labeled_data = [(vec, target) for vec in game_data]
+        labeled_data = []
+        for p, vec in game_data:
+            player_team = 0 if p in [0, 2] else 1
+            if player_team == winner_team:
+                reward = 1.0
+            else:
+                reward = -1.0
+            labeled_data.append((vec, reward))
     
     return winner_team, labeled_data
 
@@ -119,8 +162,10 @@ class TrainingSession:
     def __init__(self):
         self.model_mgr = ModelManager()
         # Ensure directory exists
-        os.makedirs("backend/data", exist_ok=True)
-        self.stats_file = "backend/data/training_stats.json"
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, "backend", "data")
+        os.makedirs(data_dir, exist_ok=True)
+        self.stats_file = os.path.join(data_dir, "training_stats.json")
         self.games_played = 0
         self.win_rates = []
         self.win_rate_trend = [] # List of {'game': int, 'win_rate': float}
@@ -161,7 +206,7 @@ class TrainingSession:
         stats = {
             "games_played": self.games_played,
             "current_win_rate": current_win_rate,
-            "model_version": f"v0.2 (MCTS-30, Trained on {self.games_played} games)",
+            "model_version": f"v0.3 (MCTS Fixed, Trained on {self.games_played} games)",
             "history": self.win_rates,
             "trend": self.win_rate_trend
         }
@@ -193,24 +238,37 @@ class TrainingSession:
         if self.games_played % 20 == 0:
             self.model_mgr.save_model()
             
-    def run_training_loop(self):
-        print("Starting Training Loop (Self-Play with Replay Buffer)...")
+    def run_training_loop(self, num_games=None, opponent_type='mcts'):
+        print(f"Starting Training Loop (Mode: vs {opponent_type})...")
+        
+        target_games = None
+        if num_games:
+            target_games = self.games_played + num_games
+            print(f"Target: Play {num_games} new games (Stop at {target_games})")
+            
         while True:
+            # Check exit condition
+            if target_games is not None and self.games_played >= target_games:
+                print(f"Completed {num_games} new games. Stopping.")
+                break
+                
             # 1. Play Game
             try:
-                winner, new_data = self_play_game(self.model_mgr)
+                winner, new_data = self_play_game(self.model_mgr, opponent_type=opponent_type)
                 print(f"Game {self.games_played + 1} Finished. Winner: Team {winner}")
                 
                 # 2. Update Stats
                 self.update_stats(winner)
                 
                 # 3. Add to Buffer
-                self.replay_buffer.extend(new_data)
-                if len(self.replay_buffer) > self.buffer_size:
-                    self.replay_buffer = self.replay_buffer[-self.buffer_size:]
+                if new_data:
+                    self.replay_buffer.extend(new_data)
+                    if len(self.replay_buffer) > self.buffer_size:
+                        self.replay_buffer = self.replay_buffer[-self.buffer_size:]
                 
                 # 4. Train
-                if self.games_played % 2 == 0: # Train every 2 games
+                # Train every 1 game if we have enough data
+                if len(self.replay_buffer) >= 100:
                     self.train_step()
                 
             except Exception as e:
@@ -220,5 +278,10 @@ class TrainingSession:
                 time.sleep(1)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Guandan RL Training')
+    parser.add_argument('--games', type=int, default=None, help='Number of games to play (default: infinite)')
+    parser.add_argument('--opponent', type=str, default='mcts', choices=['heuristic', 'mcts'], help='Opponent type: heuristic or mcts (default: mcts)')
+    args = parser.parse_args()
+    
     session = TrainingSession()
-    session.run_training_loop()
+    session.run_training_loop(num_games=args.games, opponent_type=args.opponent)

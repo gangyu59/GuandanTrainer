@@ -591,17 +591,38 @@ export function App() {
       const newPass = passCount + 1;
       let clearedLast = last;
       let resetPass = newPass;
+      let nextIndex = -1;
+
       if (activeCount > 1 && newPass >= activeCount - 1) {
+        // Round Over
         clearedLast = null;
         resetPass = 0;
+        
+        // Jie Feng Logic
+        if (last) {
+            const trickWinner = last.playerIndex;
+            if (finishedPlayers.includes(trickWinner)) {
+                // Partner leads
+                nextIndex = (trickWinner + 2) % 4;
+                if (finishedPlayers.includes(nextIndex)) {
+                     nextIndex = getNextActivePlayerIndex(trickWinner);
+                }
+            } else {
+                nextIndex = trickWinner;
+            }
+        } else {
+             nextIndex = getNextActivePlayerIndex(0);
+        }
+      } else {
+         nextIndex = getNextActivePlayerIndex(playerIndex);
       }
+
       setPassCount(resetPass);
       setLastPlay(clearedLast);
       setLastActions((prev) => ({
         ...prev,
         [playerIndex]: { cards: [], type: "pass" },
       }));
-      const nextIndex = getNextActivePlayerIndex(playerIndex);
       setCurrentPlayerIndex(nextIndex);
       return;
     }
@@ -888,6 +909,63 @@ export function App() {
     setCurrentPlayerIndex(nextIndex);
   }
 
+  const [trainingStatus, setTrainingStatus] = useState<"idle" | "running">("idle");
+  const [currentTrainingMode, setCurrentTrainingMode] = useState<"heuristic" | "self_play" | null>(null);
+
+  useEffect(() => {
+    // Poll training status
+    const interval = setInterval(async () => {
+      if (!showDashboard) return;
+      try {
+        const res = await fetch(`${API_BASE}/training/status`);
+        if (res.ok) {
+          const data = await res.json();
+          setTrainingStatus(data.running ? "running" : "idle");
+          if (!data.running) setCurrentTrainingMode(null);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [showDashboard]);
+
+  async function handleStartTraining(mode: "heuristic" | "self_play") {
+    if (trainingStatus === "running") {
+      alert("Training is already running. Please stop it first.");
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE}/training/start?mode=${mode}`, {
+        method: "POST",
+      });
+      if (response.ok) {
+        setTrainingStatus("running");
+        setCurrentTrainingMode(mode);
+        alert(
+          `已启动无限循环训练任务: ${
+            mode === "heuristic" ? "挑战规则 (Warmup)" : "自我进化 (Self-Play)"
+          }`,
+        );
+      } else {
+        alert("启动失败");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("请求失败");
+    }
+  }
+
+  async function handleStopTraining() {
+    try {
+      await fetch(`${API_BASE}/training/stop`, { method: "POST" });
+      setTrainingStatus("idle");
+      setCurrentTrainingMode(null);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   function handlePass() {
     if (!game || gameOver) return;
     if (currentPlayerIndex !== 0 && !autoPlay) return;
@@ -902,10 +980,42 @@ export function App() {
     const newPass = passCount + 1;
     let clearedLast = lastPlay;
     let resetPass = newPass;
-    if (activeCount > 1 && newPass >= activeCount - 1) {
+    let nextIndex = -1;
+
+    // Calculate required passes
+    // If the trick winner is already finished (out), we need passes from ALL remaining active players (activeCount).
+    // If the trick winner is still in, we need passes from all OTHER active players (activeCount - 1).
+    let requiredPasses = activeCount - 1;
+    if (lastPlay && finishedPlayers.includes(lastPlay.playerIndex)) {
+        requiredPasses = activeCount;
+    }
+
+    if (activeCount > 1 && newPass >= requiredPasses) {
+      // Round Over
       clearedLast = null;
       resetPass = 0;
+
+      // Check for Jie Feng (Passing the Wind)
+      if (lastPlay) {
+          const trickWinner = lastPlay.playerIndex;
+          if (finishedPlayers.includes(trickWinner)) {
+              // Partner Jie Feng
+              nextIndex = (trickWinner + 2) % 4;
+              if (finishedPlayers.includes(nextIndex)) {
+                  nextIndex = getNextActivePlayerIndex(trickWinner);
+              }
+          } else {
+              // Winner leads
+              nextIndex = trickWinner;
+          }
+      } else {
+          nextIndex = getNextActivePlayerIndex(0);
+      }
+    } else {
+      // Normal Pass
+      nextIndex = getNextActivePlayerIndex(0);
     }
+
     setLastActions((prev) => ({
       ...prev,
       0: { cards: [], type: "pass" },
@@ -914,7 +1024,6 @@ export function App() {
     setPassCount(resetPass);
     setLastPlay(clearedLast);
 
-    const nextIndex = getNextActivePlayerIndex(0);
     setCurrentPlayerIndex(nextIndex);
   }
 
@@ -1346,6 +1455,107 @@ export function App() {
                   )}
                 </div>
 
+                {/* Training Control Section */}
+                <div style={{marginBottom: "30px"}}>
+                  <h4 style={{marginTop: 0, borderLeft: "4px solid #ff5722", paddingLeft: "10px", marginBottom: "15px"}}>
+                    训练控制 (Training Control)
+                  </h4>
+                  <div style={{display: "flex", gap: "15px", alignItems: "center"}}>
+                      <button 
+                        onClick={() => handleStartTraining("heuristic")}
+                        disabled={trainingStatus === "running"}
+                        className="training-btn"
+                        style={{
+                            padding: "12px 24px", 
+                            background: currentTrainingMode === "heuristic" ? "#e65100" : (trainingStatus === "running" ? "#e0e0e0" : "linear-gradient(135deg, #ff9800, #f57c00)"), 
+                            color: trainingStatus === "running" && currentTrainingMode !== "heuristic" ? "#999" : "white", 
+                            border: "none", 
+                            borderRadius: "8px",
+                            cursor: trainingStatus === "running" ? "not-allowed" : "pointer",
+                            fontWeight: "bold",
+                            flex: 1,
+                            boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                            transition: "all 0.2s ease",
+                            transform: currentTrainingMode === "heuristic" ? "scale(0.98)" : "scale(1)",
+                            opacity: trainingStatus === "running" && currentTrainingMode !== "heuristic" ? 0.6 : 1
+                        }}
+                        onMouseEnter={(e) => {
+                           if (trainingStatus !== "running") {
+                             e.currentTarget.style.transform = "translateY(-2px)";
+                             e.currentTarget.style.boxShadow = "0 6px 12px rgba(0,0,0,0.15)";
+                           }
+                        }}
+                        onMouseLeave={(e) => {
+                           if (trainingStatus !== "running") {
+                             e.currentTarget.style.transform = "translateY(0)";
+                             e.currentTarget.style.boxShadow = "0 4px 6px rgba(0,0,0,0.1)";
+                           }
+                        }}
+                      >
+                        {currentTrainingMode === "heuristic" ? "⏳ 正在训练..." : "🔥 阶段一：挑战规则 (Warmup)"}
+                        <div style={{fontSize: "11px", fontWeight: "normal", marginTop: "4px", opacity: 0.9}}>AI vs Heuristic (Infinite Loop)</div>
+                      </button>
+                      
+                      <button 
+                        onClick={() => handleStartTraining("self_play")}
+                        disabled={trainingStatus === "running"}
+                        className="training-btn"
+                        style={{
+                            padding: "12px 24px", 
+                            background: currentTrainingMode === "self_play" ? "#c62828" : (trainingStatus === "running" ? "#e0e0e0" : "linear-gradient(135deg, #f44336, #d32f2f)"), 
+                            color: trainingStatus === "running" && currentTrainingMode !== "self_play" ? "#999" : "white", 
+                            border: "none", 
+                            borderRadius: "8px",
+                            cursor: trainingStatus === "running" ? "not-allowed" : "pointer",
+                            fontWeight: "bold",
+                            flex: 1,
+                            boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                            transition: "all 0.2s ease",
+                            transform: currentTrainingMode === "self_play" ? "scale(0.98)" : "scale(1)",
+                            opacity: trainingStatus === "running" && currentTrainingMode !== "self_play" ? 0.6 : 1
+                        }}
+                        onMouseEnter={(e) => {
+                           if (trainingStatus !== "running") {
+                             e.currentTarget.style.transform = "translateY(-2px)";
+                             e.currentTarget.style.boxShadow = "0 6px 12px rgba(0,0,0,0.15)";
+                           }
+                        }}
+                        onMouseLeave={(e) => {
+                           if (trainingStatus !== "running") {
+                             e.currentTarget.style.transform = "translateY(0)";
+                             e.currentTarget.style.boxShadow = "0 4px 6px rgba(0,0,0,0.1)";
+                           }
+                        }}
+                      >
+                        {currentTrainingMode === "self_play" ? "⏳ 正在训练..." : "🚀 阶段二：自我进化 (Self-Play)"}
+                        <div style={{fontSize: "11px", fontWeight: "normal", marginTop: "4px", opacity: 0.9}}>AI vs AI (Infinite Loop)</div>
+                      </button>
+
+                      {trainingStatus === "running" && (
+                        <button
+                          onClick={handleStopTraining}
+                          style={{
+                            padding: "12px 20px",
+                            background: "#607d8b",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                            boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px"
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = "#546e7a"}
+                          onMouseLeave={(e) => e.currentTarget.style.background = "#607d8b"}
+                        >
+                          🛑 停止
+                        </button>
+                      )}
+                  </div>
+                </div>
+
                 {/* Stats Section */}
                 <div>
                   <h4 style={{marginTop: 0, borderLeft: "4px solid #4caf50", paddingLeft: "10px", marginBottom: "15px"}}>
@@ -1523,14 +1733,14 @@ export function App() {
           const action = lastActions[pIndex];
           if (!action) return null;
           
-          let style: React.CSSProperties = { position: "absolute", zIndex: 250 };
+          let style: React.CSSProperties = { position: "absolute", zIndex: 400 };
           if (pIndex === 0) {
             style.bottom = "28%"; 
             style.left = "50%";
             style.transform = "translateX(-50%)";
           } else if (pIndex === 1) {
             style.top = "40%";
-            style.left = "15%"; 
+            style.left = "20%"; 
             style.transform = "translateY(-50%)";
           } else if (pIndex === 2) {
              style.top = "25%";
@@ -1538,7 +1748,7 @@ export function App() {
              style.transform = "translateX(-50%)";
           } else if (pIndex === 3) {
              style.top = "40%";
-             style.right = "15%";
+             style.right = "20%";
              style.transform = "translateY(-50%)";
           }
 

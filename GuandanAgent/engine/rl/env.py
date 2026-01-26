@@ -2,8 +2,8 @@
 import random
 import copy
 from typing import List, Dict, Any, Optional
-from engine.cards import Card, standard_deck, Rank, Suit
-from engine.logic import get_legal_moves, sort_hand, get_rank_value
+from GuandanAgent.engine.cards import Card, standard_deck, Rank, Suit
+from GuandanAgent.engine.logic import get_legal_moves, sort_hand, get_rank_value, get_rank_from_card, get_suit_from_card
 
 def state_to_vector(state: 'GuandanEnv') -> List[float]:
     """
@@ -17,8 +17,8 @@ def state_to_vector(state: 'GuandanEnv') -> List[float]:
     # We map them to indices 0-14.
     if state.my_hand:
         for card in state.my_hand:
-            # card.rank.value is an enum string (e.g., "2", "3", "J").
-            r_str = card.rank.value if hasattr(card.rank, 'value') else card.rank
+            # Use helper to handle both Card objects and dicts
+            r_str = get_rank_from_card(card)
             val = get_rank_value(r_str)
             
             # Map val to 0-14 index
@@ -108,20 +108,19 @@ class GuandanEnv:
         self.pass_count = pass_count
         
         # If there was a last play, we need to know who played it.
-        # But we don't. We assume it was the previous player (Index 3) for simplicity,
-        # unless it's a free turn.
         if last_play and last_play.get('cards'):
-            # If current_player is known, last player is (current - 1) % 4
-            # But wait, if we pass current_player, we should calculate relative to it?
-            # Existing logic assumed current_player=0.
-            # If we are in "God View" (all_hands provided), we usually start from a clean state or pass correct current_player.
-            # If last_play is provided, usually pass_count is 0.
-            
-            # Correct logic: Last player is the one before current, UNLESS last_play explicitly says who played it.
-            # But last_play dict usually doesn't have 'player_index' in our simplified structure here?
-            # Actually frontend sends {cards:..., type:...}
-            # Let's assume it was (current-1) for now if not specified.
-            self.last_player_idx = (self.current_player - 1) % 4
+            # PRIORITIZE explicit player_index in last_play
+            if 'player_index' in last_play:
+                self.last_player_idx = int(last_play['player_index'])
+                # Infer pass_count from player gap
+                # Gap = (Current - Last - 1) % 4
+                # P0 plays, P1 passes, P2 current. Gap = (2 - 0 - 1) = 1.
+                self.pass_count = (self.current_player - self.last_player_idx - 1) % 4
+            else:
+                # Fallback to inference from pass_count
+                self.last_player_idx = (self.current_player - 1 - pass_count) % 4
+                # Ensure pass_count is synced if we used the argument
+                self.pass_count = pass_count
         else:
             self.last_player_idx = -1 # No one
             self.pass_count = 3 # Treat as free play
@@ -130,11 +129,11 @@ class GuandanEnv:
     def my_hand(self):
         return self.hands[self.current_player]
         
-    def _count_cards(self, cards: List[Card]):
+    def _count_cards(self, cards: List[Any]):
         counts = {}
         for c in cards:
-            r = c.rank.value if hasattr(c.rank, 'value') else c.rank
-            s = c.suit.value if hasattr(c.suit, 'value') else c.suit
+            r = get_rank_from_card(c)
+            s = get_suit_from_card(c)
             key = (r, s)
             counts[key] = counts.get(key, 0) + 1
         return counts
@@ -173,8 +172,8 @@ class GuandanEnv:
             to_remove = self._count_cards(cards_to_play)
             
             for c in self.hands[player]:
-                r = c.rank.value if hasattr(c.rank, 'value') else c.rank
-                s = c.suit.value if hasattr(c.suit, 'value') else c.suit
+                r = get_rank_from_card(c)
+                s = get_suit_from_card(c)
                 key = (r, s)
                 if to_remove.get(key, 0) > 0:
                     to_remove[key] -= 1
@@ -192,7 +191,10 @@ class GuandanEnv:
             
         # Check Winner
         if len(self.hands[player]) == 0:
-            return self, 1 if player == 0 else -1, True, {}
+            # Fix Team Logic: Team 0 is {0, 2}, Team 1 is {1, 3}
+            # Reward is 1 if Team 0 wins, -1 if Team 1 wins.
+            reward = 1 if player in [0, 2] else -1
+            return self, reward, True, {}
             
         # Next player
         # If 3 consecutive passes (pass_count == 3), the round is over.

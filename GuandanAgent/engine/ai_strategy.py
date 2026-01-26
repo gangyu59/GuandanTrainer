@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from engine.cards import Rank, Suit, Card
 from engine.logic import (
     sort_hand, group_cards, get_legal_moves, get_rank_value, 
-    get_bomb_score, get_rank_from_card, calculate_hand_strength
+    get_rank_from_card, calculate_hand_strength
 )
 from engine.rl.env import GuandanEnv
 from engine.rl.mcts import MCTSNode, MCTS
@@ -16,6 +16,8 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../backend/.env
 
 # Removed duplicated logic (moved to logic.py)
 
+def get_model_manager():
+    return None
 
 def query_llm(context: str, options: List[str]) -> tuple[int, str]:
     """
@@ -145,9 +147,52 @@ def mcts_strategy(state: Any) -> Dict[str, Any]:
     if not my_hand:
         return {"action": "pass", "cards": [], "message": "No cards left", "reasoning": "No cards"}
 
+    # Convert CardModel/Dict to Engine Card objects for consistency
+    engine_hand = []
+    try:
+        for c in my_hand:
+            s_str = c.suit if hasattr(c, 'suit') else c.get('suit')
+            r_str = c.rank if hasattr(c, 'rank') else c.get('rank')
+            engine_hand.append(Card(suit=Suit(s_str), rank=Rank(r_str)))
+    except Exception as e:
+        print(f"Card Conversion Error: {e}")
+        engine_hand = my_hand # Fallback
+
     # Initialize Environment
     # GuandanEnv expects my_hand (List[Card]) and last_play (Dict)
-    env = GuandanEnv(my_hand, last_play, current_level=current_level)
+    # We must pass the correct player index to ensure relative positions (teammates/opponents) are correct.
+    player_idx = getattr(state, 'player_index', 0)
+    
+    # Convert last_play cards to Engine Card objects if present
+    # The frontend sends cards as dicts/models, but logic.py expects Card objects
+    if last_play and 'cards' in last_play:
+        try:
+            converted_cards = []
+            for c in last_play['cards']:
+                if isinstance(c, dict):
+                    s_str = c.get('suit')
+                    r_str = c.get('rank')
+                    converted_cards.append(Card(suit=Suit(s_str), rank=Rank(r_str)))
+                elif hasattr(c, 'suit') and hasattr(c, 'rank'):
+                    converted_cards.append(Card(suit=Suit(c.suit), rank=Rank(c.rank)))
+                else:
+                    converted_cards.append(c) # Hope it's already a Card
+            
+            # Update last_play with converted cards (create a copy to avoid mutating state)
+            last_play = last_play.copy()
+            last_play['cards'] = converted_cards
+        except Exception as e:
+            print(f"Last Play Card Conversion Error: {e}")
+            # If conversion fails, we might crash later, but let's try to proceed
+    
+    # Debug Logging
+    print(f"AI Strategy: Player {player_idx}, Level {current_level}")
+    if last_play:
+        print(f"  Last Play: {last_play.get('type')} by P{last_play.get('player_index')} - {last_play.get('cards')}")
+    else:
+        print("  Last Play: None (Leading)")
+
+    env = GuandanEnv(engine_hand, last_play, current_player=player_idx, current_level=current_level)
     
     # Run MCTS
     # Try to use Value Network if available

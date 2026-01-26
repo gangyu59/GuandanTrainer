@@ -1,9 +1,16 @@
 
 from typing import List, Dict, Any, Optional
-from engine.cards import Card, Rank, Suit
+try:
+    from engine.cards import Card, Rank, Suit
+except ImportError:
+    try:
+        from GuandanAgent.engine.cards import Card, Rank, Suit
+    except ImportError:
+        from .cards import Card, Rank, Suit
 
 # Power Ranks
 POWER_RANK = {
+    "king_bomb": 15, # Max
     "bomb_8": 13, # Top Tier
     "bomb_7": 12, # Top Tier
     "bomb_6": 11, # Strong
@@ -81,6 +88,36 @@ def get_rank_label(card: Any) -> str:
     if hasattr(r, 'value'):
         return str(r.value)
     return str(r)
+
+def get_bomb_score(cards: List[Any], card_type: str) -> int:
+    """Calculate a comparable score for bombs."""
+    length = len(cards)
+    score = 0
+    
+    # Base value from length
+    if card_type == "KingBomb":
+        return 1000 # Max
+    elif card_type == "StraightFlush":
+        # User: 5 Straight Flush > 5 Bomb.
+        # 5 Bomb Base = 200. 6 Bomb Base = 300.
+        # So SF (5 cards) should be > 200. Let's make it 250.
+        base = 250 
+    else:
+        if length == 4:
+            base = 100
+        elif length == 5:
+            base = 200
+        elif length >= 6:
+            base = 300 + (length - 6) * 50
+        else:
+            base = 0
+            
+    # Add Rank Value
+    if cards:
+        rank_val = get_rank_value(get_rank_from_card(cards[0]))
+        score = base + rank_val
+        
+    return score
 
 def find_straight_flushes(hand: List[Any], all_combinations: bool = False, wild_budget: int = 0) -> List[Dict[str, Any]]:
     """
@@ -200,6 +237,13 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
     }
     level_rank_str = level_rank_map.get(current_level, '2')
     
+    # Helper for level-aware value (Level Card > Ace)
+    def get_level_adjusted_value(rank_str: str) -> int:
+        val = get_rank_value(rank_str)
+        if rank_str == level_rank_str:
+            return 15
+        return val
+    
     wild_cards = []
     normal_cards = []
     
@@ -218,6 +262,7 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
     used_indices = set()
     
     # --- Layer 1: King Bomb (Always keep) ---
+    # Four Kings together is King Bomb, beats everything.
     kings = [i for i, c in enumerate(sorted_normal) if get_rank_from_card(c) in ['SJ', 'BJ']]
     if len(kings) == 4:
         group_cards_list = [sorted_normal[i] for i in kings]
@@ -246,19 +291,22 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
     sorted_ranks = sorted(rank_groups.items(), key=lambda x: (len(x[1]), get_rank_value(x[0])), reverse=True)
     
     # Pass 1: Form 6+ Bombs (Power 10)
-    for r, indices in sorted_ranks:
-        count = len(indices)
-        if any(is_used(idx) for idx in indices): continue
-        
-        # Natural 6+
-        if count >= 6:
-            groups.append({
-                "type": "bomb", 
-                "cards": [sorted_normal[i] for i in indices], 
-                "power": POWER_RANK["bomb_6_plus"]
-            })
-            used_indices.update(indices)
-            continue
+    # Disabled Greedy 6+ Bomb formation per user feedback: "5 bombs became 3 bombs".
+    # Splitting large bombs (e.g. 8-bomb -> two 4-bombs) might be better.
+    # Let Base Case / DFS handle it.
+    # for r, indices in sorted_ranks:
+    #     count = len(indices)
+    #     if any(is_used(idx) for idx in indices): continue
+    #     
+    #     # Natural 6+
+    #     if count >= 6:
+    #         groups.append({
+    #             "type": "bomb", 
+    #             "cards": [sorted_normal[i] for i in indices], 
+    #             "power": POWER_RANK["bomb_6_plus"]
+    #         })
+    #         used_indices.update(indices)
+    #         continue
             
     # Pass 2: Use Wilds to form Bombs
     # MOVED TO DFS CANDIDATES / BASE CASE
@@ -373,22 +421,6 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
         score = 0
         p_groups = []
         
-        # 1. Identify patterns from Naturals
-        # We'll store them as objects to allow modifying (adding wilds)
-        groups_data = []
-        
-        for r, cards in g_map.items():
-            groups_data.append({"rank": r, "cards": cards, "base_count": len(cards)})
-            
-        # Sort groups by count desc (Greedy: easier to upgrade larger groups)
-        groups_data.sort(key=lambda x: (len(x['cards']), get_rank_value(x['rank'])), reverse=True)
-        
-        # 2. Distribute Wilds to Maximize Score
-        # Strategy: 
-        # A. Try to form 6+ Bombs (Power 10)
-        # B. Try to form 4+ Bombs (Power 6)
-        # C. Form Triples/Pairs/Singles
-        
         # Determine Level Rank for checks
         level_rank = None
         try:
@@ -400,7 +432,49 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
             elif current_level == 14: level_rank = Rank.A
         except:
             pass
+            
+        # 1. Identify patterns from Naturals
+        # We'll store them as objects to allow modifying (adding wilds)
+        groups_data = []
+        
+        for r, cards in g_map.items():
+            # Check for Level Rank (Naturals)
+            # User Feedback: "Stupid to form a bomb with 4 level cards".
+            # Level cards are high control cards. Prefer keeping them as Pairs/Singles.
+            is_level = (level_rank and r == level_rank)
+            
+            if is_level:
+                # Force split into Pairs and Singles
+                # e.g. 4 cards -> 2 Pairs. 3 cards -> 1 Pair + 1 Single.
+                # This prevents them from being treated as a Bomb.
+                c_list = cards[:]
+                while len(c_list) >= 2:
+                    groups_data.append({"rank": r, "cards": c_list[:2], "base_count": 2})
+                    c_list = c_list[2:]
+                if c_list:
+                    groups_data.append({"rank": r, "cards": c_list, "base_count": 1})
+                continue
 
+            # Check for 8+ cards (Split into two 4-bombs)
+            # User Feedback: "Two bombs are bigger than one slightly larger bomb."
+            if len(cards) >= 8:
+                # Split into 4 and remainder (usually another 4)
+                split1 = cards[:4]
+                split2 = cards[4:]
+                groups_data.append({"rank": r, "cards": split1, "base_count": 4})
+                groups_data.append({"rank": r, "cards": split2, "base_count": len(split2)})
+            else:
+                groups_data.append({"rank": r, "cards": cards, "base_count": len(cards)})
+            
+        # Sort groups by count desc (Greedy: easier to upgrade larger groups)
+        groups_data.sort(key=lambda x: (len(x['cards']), get_rank_value(x['rank'])), reverse=True)
+        
+        # 2. Distribute Wilds to Maximize Score
+        # Strategy: 
+        # A. Try to form 6+ Bombs (Power 10)
+        # B. Try to form 4+ Bombs (Power 6)
+        # C. Form Triples/Pairs/Singles
+        
         # Pass 1: Form 4+ Bombs (Priority: Quantity over Quality)
         # We prioritize turning Triples/Pairs into Bombs (Power 7) over making existing Bombs bigger (Power 10).
         # This addresses user feedback: "5 bombs became 3 bombs".
@@ -434,13 +508,15 @@ def optimize_hand_partition(hand: List[Any], current_level: int = 2) -> Dict[str
         
         # D. Any remaining wilds -> Merge into existing groups to reduce singles
         # Try to make Wild Bombs first (Power 6) from pure wilds if we have 4+
-        while len(current_wilds) >= 4:
-             # Add to groups_data as a new bomb group
-             # We need a rank. Use rank of first wild.
-             w_rank = get_rank_from_card(current_wilds[0])
-             new_group = {"rank": w_rank, "cards": current_wilds[:4], "base_count": 0}
-             groups_data.append(new_group)
-             current_wilds = current_wilds[4:]
+        # User Feedback: "Stupid to form a bomb with 4 level cards".
+        # So we DISABLE forming bombs from pure wilds.
+        # while len(current_wilds) >= 4:
+        #      # Add to groups_data as a new bomb group
+        #      # We need a rank. Use rank of first wild.
+        #      w_rank = get_rank_from_card(current_wilds[0])
+        #      new_group = {"rank": w_rank, "cards": current_wilds[:4], "base_count": 0}
+        #      groups_data.append(new_group)
+        #      current_wilds = current_wilds[4:]
              
         # Merge remaining (<4) into existing groups
         # Since we already tried to form Bombs in Step A/B, these merges won't reach Bomb status usually.
@@ -812,6 +888,13 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
     }
     level_rank_str = level_rank_map.get(current_level, '2')
     
+    # Helper for level-aware value (Level Card > Ace)
+    def get_level_adjusted_value(rank_str: str) -> int:
+        val = get_rank_value(rank_str)
+        if rank_str == level_rank_str:
+            return 15
+        return val
+
     # Separate Wild Cards and Normal Cards
     wild_cards = []
     normal_cards = []
@@ -844,6 +927,23 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
     triples = [cards for cards in grouped_hand.values() if len(cards) >= 3]
     bombs = [cards for cards in grouped_hand.values() if len(cards) >= 4] # Basic bombs (natural)
     
+    # Filter out Bombs that use Level Card Wilds as face value (Stupid to use Wild as 2 when it can be anything)
+    # Unless it is a Natural Bomb of 4 Level Cards (e.g. 2S 2S 2C 2C) WITHOUT using the Wild (Hearts).
+    # But grouped_hand groups by rank. 2H is rank 2.
+    # So if we have 2S 2C 2D 2H. It forms a group of 4.
+    # We should exclude this if it contains 2H (Wild).
+    filtered_bombs = []
+    for b in bombs:
+        # Check if bomb rank is level rank
+        b_rank = get_rank_from_card(b[0])
+        if b_rank == level_rank_str:
+            # Check if it contains Wild (Hearts)
+            has_wild = any(get_suit_from_card(c) == 'H' for c in b)
+            if has_wild:
+                continue # Skip this "Natural" bomb because it consumes a Wild
+        filtered_bombs.append(b)
+    bombs = filtered_bombs
+    
     # Generate Advanced Types
     straights = find_consecutive_groups(unique_singles, 5, 1)
     plates = find_consecutive_groups(triples, 2, 3)
@@ -851,15 +951,16 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
     straight_flushes = find_straight_flushes(singles)
     
     # Check for 4 Kings
-    kings = [c for c in singles if get_rank_from_card(c) in ['SJ', 'BJ']]
+    # User Feedback: "No King Bomb concept, stupid to form."
+    # kings = [c for c in singles if get_rank_from_card(c) in ['SJ', 'BJ']]
     king_bomb = None
-    if len(kings) == 4:
-        king_bomb = {
-            "action": "play",
-            "cards": kings,
-            "desc": "Play Heavenly King Bomb",
-            "type": "bomb"
-        }
+    # if len(kings) == 4:
+    #     king_bomb = {
+    #         "action": "play",
+    #         "cards": kings,
+    #         "desc": "Play Heavenly King Bomb",
+    #         "type": "bomb"
+    #     }
 
     # Helper to add bombs to moves list
     all_bombs = []
@@ -875,6 +976,11 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
     if num_wilds > 0:
         # Try to form bombs with every normal rank
         for rank, cards in grouped_normal.items():
+            # User Feedback: "Stupid to form a bomb with 4 level cards".
+            # Don't use Wilds to make a bomb of Level Rank cards (which are already high value).
+            if rank == level_rank_str:
+                continue
+
             count = len(cards)
             # If we can make a bomb (at least 4 cards total)
             if count + num_wilds >= 4:
@@ -981,6 +1087,18 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
         target_cards = last_play.get("cards", [])
         target_type = last_play.get("type", "unknown")
         
+        # Normalize types from Frontend/Partitioning to Logic types
+        type_map = {
+            "single": "1",
+            "pair": "2",
+            "triple": "3",
+            "full_house": "3+2",
+            "plate": "steel_plate",
+            "board": "wooden_board"
+        }
+        if target_type in type_map:
+            target_type = type_map[target_type]
+        
         # Infer type if unknown or generic
         if not target_type or target_type == "unknown":
             t_grouped = group_cards(target_cards)
@@ -1016,7 +1134,20 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
                     target_type = "wooden_board"
                 # Note: 6-card bomb handled by first check
             
-        target_val = get_rank_value(get_rank_from_card(target_cards[0])) if target_cards else 0
+        # Determine target value for comparison
+        # Use level-adjusted value for Singles, Pairs, Triples, Bombs
+        # Use natural value for Straights, Plates, Boards
+        is_natural_type = target_type in ["steel_plate", "wooden_board", "straight"]
+        
+        if target_cards:
+            raw_rank = get_rank_from_card(target_cards[0])
+            target_val = get_rank_value(raw_rank) if is_natural_type else get_level_adjusted_value(raw_rank)
+            
+            # DEBUG: Logic Inspection
+            # print(f"DEBUG: Logic Target - Rank: {raw_rank} Val: {target_val} Type: {target_type}")
+        else:
+            target_val = 0
+
         # For structured types, target_val usually implies the rank of the largest card in the sequence or the triplet
         # Adjust target_val for special types
         if target_type == "3+2":
@@ -1024,7 +1155,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
             t_grouped = group_cards(target_cards)
             for r, cards in t_grouped.items():
                 if len(cards) == 3:
-                    target_val = get_rank_value(r)
+                    target_val = get_level_adjusted_value(r) # Triple uses adjusted value
                     break
         elif target_type in ["steel_plate", "wooden_board", "straight"]:
              # Use the smallest rank to compare start-to-start, or largest to compare end-to-end?
@@ -1042,7 +1173,7 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
                 seen_ranks = set()
                 count = 0
                 for card in singles:
-                    if get_rank_value(card.rank) > target_val:
+                    if get_level_adjusted_value(card.rank) > target_val:
                         if card.rank not in seen_ranks:
                             moves.append({
                                 "action": "play",
@@ -1055,9 +1186,9 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
                             if count >= 3: break
                             
             elif target_type == "2":
-                pairs.sort(key=lambda x: get_rank_value(x[0].rank))
+                pairs.sort(key=lambda x: get_level_adjusted_value(x[0].rank))
                 for p in pairs:
-                    if get_rank_value(p[0].rank) > target_val:
+                    if get_level_adjusted_value(p[0].rank) > target_val:
                         moves.append({
                             "action": "play",
                             "cards": p[:2],
@@ -1067,9 +1198,9 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
                         if len(moves) > 3: break
             
             elif target_type == "3":
-                triples.sort(key=lambda x: get_rank_value(x[0].rank))
+                triples.sort(key=lambda x: get_level_adjusted_value(x[0].rank))
                 for t in triples:
-                    if get_rank_value(t[0].rank) > target_val:
+                    if get_level_adjusted_value(t[0].rank) > target_val:
                         moves.append({
                             "action": "play",
                             "cards": t[:3],
@@ -1079,12 +1210,12 @@ def get_legal_moves(my_hand: List[Any], last_play: Any, current_level: int = 2) 
                         if len(moves) > 2: break
 
             elif target_type == "3+2":
-                triples.sort(key=lambda x: get_rank_value(x[0].rank))
+                triples.sort(key=lambda x: get_level_adjusted_value(x[0].rank))
                 for t in triples:
-                    if get_rank_value(t[0].rank) > target_val:
+                    if get_level_adjusted_value(t[0].rank) > target_val:
                         # Need a pair (any pair, even small one)
                         # Prefer smallest pair
-                        pairs.sort(key=lambda x: get_rank_value(x[0].rank))
+                        pairs.sort(key=lambda x: get_level_adjusted_value(x[0].rank))
                         found_pair = None
                         for p in pairs:
                             if p[0].rank != t[0].rank:
